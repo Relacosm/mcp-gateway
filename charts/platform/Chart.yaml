@@ -1,0 +1,8 @@
+apiVersion: v2
+name: platform
+description: Team MCP gateway with a WooCommerce store, as one umbrella chart
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+# Subcharts (store, woo-mcp, utils-mcp, gateway, dashboard) live in ./charts
+# and are added phase by phase.

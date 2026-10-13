@@ -1,0 +1,24 @@
+# Local cluster: k3s in Docker, with the built-in Traefik ingress published on
+# host ports 80/443 so *.localtest.me (always 127.0.0.1) reaches the Ingress.
+#
+#   k3d cluster create --config k3d/cluster.yaml
+#   k3d cluster delete urumi
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: urumi
+servers: 1
+agents: 0
+# Pin the API server to loopback. The default (host.docker.internal) can
+# resolve to a LAN address that Windows refuses connections on.
+kubeAPI:
+  host: "127.0.0.1"
+  hostIP: "127.0.0.1"
+  hostPort: "6550"
+ports:
+  - port: 80:80
+    nodeFilters:
+      - loadbalancer
+  - port: 443:443
+    nodeFilters:
+      - loadbalancer

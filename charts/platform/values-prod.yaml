@@ -1,0 +1,9 @@
+# k3s on a VPS. Replace the domain; real secrets are passed at install time
+# (--set or an untracked *.secret.yaml file), never committed here.
+#   helm upgrade --install platform charts/platform -n urumi --create-namespace -f charts/platform/values-prod.yaml
+global:
+  domain: example.com
+  ingress:
+    className: traefik
+    tls: true
+  storageClass: local-path

@@ -1,0 +1,182 @@
+WORKING PHASES
+==============
+Core is Phases 0-9, done in order. Phase 10 is optional.
+Rule: do not start a phase until the "Done when" check of the previous one
+passes. See project_context.txt for the design and the reasons behind it.
+
+
+PHASE 0 - Setup   [DONE]
+------------------------
+Tasks
+  - Install and verify: Docker Desktop, k3d, kubectl, helm, Node.js, git.
+  - Create the k3d cluster with ports 80/443 mapped to the host.
+  - git init, create the repo folders, .gitignore (no secrets, no node_modules).
+  - Empty umbrella Helm chart that installs cleanly.
+Done when
+  - "kubectl get nodes" shows a Ready node.
+  - "helm install" of the empty chart succeeds.
+
+
+PHASE 1 - Store on Kubernetes
+-----------------------------
+Tasks
+  - Helm chart: MariaDB (StatefulSet + PVC) and WordPress (Deployment + PVC).
+  - Secrets for DB and WordPress admin passwords, taken from values.
+  - Ingress at store.localtest.me.
+  - Setup Job (WP-CLI): install WordPress, install + activate WooCommerce,
+    enable COD, set store basics, create the REST API consumer key/secret and
+    save them into a Kubernetes Secret.
+  - Probes and resource requests/limits.
+Done when
+  - Storefront opens in the browser.
+  - A product can be ordered with COD and the order shows in WooCommerce admin.
+  - Deleting the WordPress and MariaDB pods loses no data.
+
+
+PHASE 2 - WooCommerce MCP server
+--------------------------------
+Tasks
+  - Node/TypeScript service using the MCP SDK, Streamable HTTP transport.
+  - Tools: list_products, create_product, list_orders, get_order,
+    update_order_status. list_orders must support a date filter ("today").
+  - Reads the WooCommerce REST key/secret from the Secret made in Phase 1.
+  - Requires a bearer token from callers (the gateway will hold it).
+  - Dockerfile (non-root), Helm chart, ClusterIP only, /healthz, probes, limits.
+Done when
+  - MCP Inspector through "kubectl port-forward" lists the 5 tools.
+  - create_product makes a product appear on the storefront.
+  - list_orders returns the order placed in Phase 1.
+
+
+PHASE 3 - Gateway backend  <- the biggest phase
+-----------------------------------------------
+3a. Foundations
+  - Postgres chart + schema: users, api_keys, servers, audit_log.
+  - Login with email + password, session cookie, admin and member roles.
+  - First admin created at install time from a Secret.
+3b. Team and keys
+  - Admin: invite / list / remove members.
+  - Any user: create and revoke own API key. Admin: revoke anyone's key.
+  - Keys stored as SHA-256 hash + display prefix, shown once.
+3c. Upstream servers
+  - CRUD for servers: name, slug, URL, optional credential (bearer or header),
+    enabled flag. Credential encrypted at rest, never returned by the API.
+  - Connection manager: one MCP client per server, background health check,
+    cached tool list, status Connected / Unreachable / Disabled.
+3d. The gateway MCP endpoint
+  - One Streamable HTTP endpoint, authenticated by the user's API key.
+  - tools/list = all tools of enabled + connected servers, named
+    <slug>__<tool>.
+  - tools/call = route by slug, add the upstream credential, apply a timeout,
+    return a clear error on failure.
+  - Write an audit log row for every call (user, server, tool, time, duration,
+    outcome).
+3e. Seed
+  - The WooCommerce MCP server is registered automatically on first start.
+Done when
+  - MCP Inspector, with only the gateway URL and an API key, lists woo__ tools
+    and can call them.
+  - A revoked key gets rejected.
+  - Scaling the Woo MCP server to 0 gives a quick, clear error and the status
+    turns Unreachable.
+  - Each call has a correct audit row.
+
+
+PHASE 4 - Dashboard
+-------------------
+Tasks
+  - React + Vite app, nginx image, Helm chart, Ingress at gateway.localtest.me.
+  - Pages: Login, Servers (status + tools, add/edit/disable/remove),
+    Members (admin only), API Keys, Audit Log (filter by user/server).
+  - Members cannot see admin pages, and the backend rejects them too.
+Done when
+  - Everything from Phase 3 can be done from the browser, with no curl.
+  - No API response contains an upstream credential (check the network tab).
+
+
+PHASE 5 - Chat agent
+--------------------
+Tasks
+  - Backend chat endpoint with the tool loop:
+      send messages + tool list to the LLM -> if it asks for tools, run them
+      through the SAME gateway routing as external clients, as the logged-in
+      user -> feed results back -> repeat until a final answer (with a step cap).
+  - LLM provider is config only (base URL, model, API key from a Secret).
+  - Chat page shows each tool call (name, arguments, result or error).
+Done when
+  - User A: "create a product called X for 499" -> product is on the storefront.
+  - User A: "what orders came in today" -> returns the order placed by hand.
+  - Both calls are in the audit log under user A.
+
+
+PHASE 6 - Two more upstream servers
+-----------------------------------
+Tasks
+  - Write and deploy the small in-cluster "utils" MCP server (bearer token).
+  - Register it and one public remote MCP server through the dashboard.
+  - Test a tool name collision between two servers.
+Done when
+  - Three servers show as Connected.
+  - One prompt uses two servers, for example:
+    "List today's orders and convert the total to USD".
+  - Disabling a server removes its tools from the chat and the MCP client.
+  - Killing the utils pod: woo tools still work, dashboard shows Unreachable.
+
+
+PHASE 7 - Kubernetes polish and production values
+-------------------------------------------------
+Tasks
+  - Check every workload: readiness, liveness, requests, limits, non-root.
+  - NetworkPolicies: only the gateway reaches the MCP servers, only the right
+    pods reach each database.
+  - Sweep the repo for hardcoded secrets.
+  - Write values-prod.yaml (domains, TLS, storage class, resources, images).
+  - Test "helm upgrade" and "helm rollback" once and note the commands.
+Done when
+  - A pod that is not the gateway cannot reach the Woo MCP server.
+  - A fresh cluster + one "helm install" brings the whole system up.
+  - "helm template" with values-prod.yaml renders without errors.
+
+
+PHASE 8 - Docs
+--------------
+Tasks
+  - README: local setup, VPS setup, place an order, connect an MCP client,
+    use the chat agent.
+  - docs/system-design.md: architecture, aggregation, routing, failure
+    handling, what changes for production.
+  - docs/threat-model.md: the four required topics.
+Done when
+  - Following only the README on a clean cluster gets a working system.
+
+
+PHASE 9 - Full rehearsal, demo video, submit
+--------------------------------------------
+Tasks
+  - Run the whole Definition of Done checklist start to finish with users A
+    and B. Fix whatever breaks.
+  - Practise explaining each part out loud: Kubernetes resources, the MCP
+    flow, how credentials move, where isolation is enforced.
+  - Record the video in the order the brief lists, push the repo, submit.
+Done when
+  - Every box in section 8 of project_context.txt is ticked on camera.
+
+
+PHASE 10 - Optional extras (only after the core works end to end)
+-----------------------------------------------------------------
+Pick by value for effort, in this order:
+  1. Real VPS deploy on k3s with TLS (the prod values already exist).
+  2. Tool permissions per role (members read, admins write).
+  3. SSRF protection when an admin adds a server URL.
+  4. Rate limits per key, basic metrics per server.
+  5. Bonus: multi-store provisioning (the largest extra; do it last).
+
+
+RISKS TO WATCH
+--------------
+- WordPress setup Job is fiddly. Make it safe to re-run.
+- Phase 3 is the easiest place to get stuck. Get 3d working with ONE server
+  first.
+- Free LLM tiers have rate limits and weaker tool calling. Keep the tool list
+  small and tool descriptions clear.
+- Windows + Docker Desktop: give Docker at least 6 GB of RAM.

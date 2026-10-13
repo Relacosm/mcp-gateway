@@ -1,0 +1,9 @@
+# Defaults shared by every environment.
+# Environment differences go in values-local.yaml and values-prod.yaml.
+global:
+  # Base domain; each public component gets a subdomain of it.
+  domain: localtest.me
+  ingress:
+    className: traefik
+    tls: false
+  storageClass: local-path

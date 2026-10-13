@@ -1,0 +1,9 @@
+# Local k3d cluster.
+#   helm upgrade --install platform charts/platform -n urumi --create-namespace -f charts/platform/values-local.yaml
+global:
+  # *.localtest.me resolves to 127.0.0.1, so no hosts file edits are needed.
+  domain: localtest.me
+  ingress:
+    className: traefik
+    tls: false
+  storageClass: local-path

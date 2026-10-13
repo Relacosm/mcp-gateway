@@ -1,0 +1,212 @@
+PROJECT CONTEXT
+===============
+Team MCP Gateway on Kubernetes, with a WooCommerce store as the first data source.
+A working core is worth more than an unfinished bonus.
+
+
+1. WHAT WE ARE BUILDING (in one paragraph)
+------------------------------------------
+A "reception desk" for AI tools. An admin plugs MCP servers into a dashboard
+once. Every team member then gets ONE gateway URL and their OWN API key, and
+through that they can use the tools of every server, either from an MCP client
+(Claude Code, Cursor, MCP Inspector) or from a chat agent inside the dashboard.
+Members never see the upstream servers' credentials.
+
+
+2. THE FOUR LAYERS
+------------------
+1) Store
+   WordPress + WooCommerce + database, running in Kubernetes with persistent
+   storage. A customer can add a product to the cart and check out with COD.
+
+2) WooCommerce MCP server (we write it ourselves)
+   Exposes the store as tools over MCP Streamable HTTP:
+     list_products, create_product, list_orders, get_order, update_order_status
+   Internal only. Only the gateway may call it.
+
+3) Gateway backend + React dashboard
+   - Backend is an MCP CLIENT to every registered upstream server.
+   - Backend is also an MCP SERVER that exposes all their tools on one endpoint.
+   - Dashboard: manage servers, members, API keys, and view the audit log.
+
+4) Chat agent
+   A chat in the dashboard. An LLM calls tools through the gateway, shows which
+   tools it called, and acts as the logged-in user.
+
+Rule: the chat agent and external clients ONLY go through the gateway. Nothing
+else talks to the upstream servers directly.
+
+
+3. HOW A TOOL CALL TRAVELS
+--------------------------
+  MCP client or chat agent
+        |  (gateway URL + user's API key, or the user's dashboard session)
+        v
+  Gateway: check key -> find user -> find which server owns the tool
+        |  (adds the upstream credential here, server side only)
+        v
+  Upstream MCP server (for example the WooCommerce MCP server)
+        |  (WooCommerce REST API with its own consumer key/secret)
+        v
+  WooCommerce store
+        |
+        v
+  Result goes back the same way. Gateway writes one audit log row.
+
+
+4. TECH CHOICES (and the reason for each)
+-----------------------------------------
+Local Kubernetes : k3d (k3s inside Docker). Same k3s as the VPS, so the local
+                   and prod setups stay close. Ships with Traefik ingress,
+                   local-path storage and NetworkPolicy enforcement.
+Packaging        : Helm only (no Kustomize). values-local.yaml and
+                   values-prod.yaml hold every difference.
+Store            : official WordPress image + MariaDB, our own Helm chart.
+                   A one-time setup Job uses WP-CLI to install WooCommerce,
+                   enable COD and create the REST API key.
+Woo MCP server   : Node.js + TypeScript + official MCP SDK. Talks to the store
+                   through the WooCommerce REST API (wc/v3). Reason: it is the
+                   official, stable, documented interface, works over the
+                   network, and needs no shell access into the WordPress pod.
+Gateway backend  : Node.js + TypeScript + official MCP SDK (client and server).
+Gateway database : PostgreSQL (users, API keys, servers, audit log).
+Dashboard        : React + Vite, served as static files by nginx.
+Chat agent       : lives in the backend. Uses an OpenAI-compatible chat API so
+                   the provider is just config (base URL + key + model). A free
+                   tier (Gemini or Groq) or a local model (Ollama) all work.
+Other upstreams  : (a) a small "utils" MCP server we write and run in the
+                       cluster, protected by a bearer token (time, currency
+                       conversion). Good for the "kill a pod" demo.
+                   (b) one public remote MCP server that speaks Streamable HTTP
+                       (for example DeepWiki). Shows that external URLs work.
+                   Final picks get confirmed in Phase 6.
+
+
+5. KEY DESIGN DECISIONS
+-----------------------
+Tool name collisions
+   Every tool is exposed as  <server-slug>__<tool-name>
+   Example: woo__list_orders, utils__convert_currency
+   The slug is unique per server, so two servers can both have "search".
+   The gateway splits on the first "__" to route the call.
+
+Failure handling
+   - Each upstream has its own connection, its own timeout and its own status.
+   - Tool listing uses a cached tool list per server, refreshed by a background
+     health check. One slow or dead server never blocks the others.
+   - A call to a dead or slow server returns a clear error
+     ("upstream 'utils' timed out after 15s"), not a hang.
+   - Status shown in the dashboard: Connected / Unreachable / Disabled.
+
+Users and roles
+   admin  : manages servers and members, plus everything a member can do.
+   member : creates their own API key, uses tools, uses the chat.
+
+API keys
+   - Random and long, shown to the user exactly once.
+   - Only a SHA-256 hash is stored, plus a short prefix for display.
+   - Revoked keys are rejected on the very next call.
+
+Upstream credentials
+   - Stored on the server side only, encrypted in the database with a master
+     key that lives in a Kubernetes Secret.
+   - Never returned by any API, never sent to the browser or an MCP client.
+   - The user's own gateway key is NEVER forwarded to an upstream server.
+
+Audit log
+   One row per tool call: user, server, tool, timestamp, duration, outcome.
+   Chat agent calls are logged under the logged-in user.
+
+Network isolation
+   - Public through Ingress: storefront and dashboard (+ the gateway endpoint).
+   - Internal only: databases, Woo MCP server, utils MCP server.
+   - Enforced by ClusterIP services (no Ingress) plus NetworkPolicies that
+     allow only the gateway to reach the MCP servers.
+
+Secrets
+   Nothing hardcoded in source. DB passwords, WooCommerce API keys, the
+   encryption master key, the session secret and the LLM API key all live in
+   Kubernetes Secrets, filled in from Helm values at install time.
+
+
+6. LOCAL vs PRODUCTION (values files only)
+------------------------------------------
+                 local (k3d)                 prod (k3s on a VPS)
+Domains          store.localtest.me          real domain / subdomains
+                 gateway.localtest.me
+                 (localtest.me always points to 127.0.0.1, so no hosts file)
+Ingress          Traefik, plain HTTP         Traefik, TLS via cert-manager
+Storage class    local-path                  local-path or a cloud volume class
+Secrets          dev values, not committed   real values passed at install time
+Resources        small                       larger
+Images           imported into k3d           pulled from a registry
+
+
+7. PLANNED REPO LAYOUT
+----------------------
+  charts/
+    platform/              umbrella chart, values-local.yaml, values-prod.yaml
+      charts/store/        WordPress + MariaDB + setup Job
+      charts/woo-mcp/
+      charts/utils-mcp/
+      charts/gateway/      backend + Postgres
+      charts/dashboard/
+  services/
+    woo-mcp/               WooCommerce MCP server
+    utils-mcp/             second upstream server
+    gateway/               backend, gateway, chat agent
+    dashboard/             React app
+  docs/
+    system-design.md
+    threat-model.md
+  README.md
+  phases.txt
+  project_context.txt
+
+
+8. DEFINITION OF DONE (the demo, two different users)
+-----------------------------------------------------
+Store
+  [ ] Add a product to the cart and check out with COD.
+  [ ] The order is visible in WooCommerce admin.
+
+Chat agent, as user A
+  [ ] "Create a product with name X and price Y" -> appears on the storefront.
+  [ ] Order it by hand, then ask "what orders came in today" -> it is returned.
+
+External MCP client, as user B
+  [ ] Connect with only the gateway URL and user B's API key.
+  [ ] See the tools of every enabled server; ask the orders question.
+  [ ] Run one prompt that needs tools from two different upstream servers.
+
+Team and control
+  [ ] Revoke user B's key -> next call is rejected.
+  [ ] Disable one server -> its tools vanish from the chat and the client.
+  [ ] Kill one upstream pod -> others keep working, dashboard shows Unreachable.
+  [ ] Every call above is in the audit log under the right user.
+
+
+9. HARD RULES (easy to forget)
+------------------------------
+- Helm only. Same charts for local and VPS.
+- Everything runs in the cluster.
+- Persistent storage for the store database and WordPress content.
+- Readiness + liveness probes and resource requests + limits on EVERY workload.
+- No secrets in source code.
+- The WooCommerce MCP server must be written by us, not an existing plugin.
+- At least three upstream servers connected.
+- At least two roles.
+- We must be able to explain every part in a live walkthrough.
+
+
+10. DELIVERABLES
+----------------
+- GitHub repo with all source code and Helm charts (local + prod values).
+- README: local setup, VPS setup, how to place an order, connect an MCP client
+  and use the chat agent.
+- "System design and tradeoffs" note.
+- Threat model note (shared upstream credentials, why client tokens are not
+  passed through, untrusted upstreams and prompt injection through tool
+  descriptions, what one member can do to another).
+- A list of any bonus or stand-out items attempted and where to find them.
+- Demo video.

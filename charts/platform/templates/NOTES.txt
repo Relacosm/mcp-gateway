@@ -1,0 +1,2 @@
+Release {{ .Release.Name }} installed in namespace {{ .Release.Namespace }}.
+Base domain: {{ .Values.global.domain }}
