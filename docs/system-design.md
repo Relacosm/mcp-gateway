@@ -19,6 +19,33 @@ subchart reads the same value. Each is generated on first install unless passed 
 back with `lookup` on upgrades, so no secret is ever in the repo and upgrades never rotate
 them by accident.
 
+## Multi-store
+
+Extra stores are created from the dashboard, and each gets **its own MCP server**: tools such as
+`bakery__list_orders`. We chose one server per store over one shared server with a `store`
+argument because then every per-server feature works per store for free (status, disable,
+members-read-only, metrics, audit filter), and adding or deleting a store never restarts
+something the other stores depend on.
+
+1. An admin posts a name. The gateway checks it (2–15 lowercase letters or digits, no
+   collision with an existing server slug), generates a bearer token for the new MCP server,
+   stores it encrypted, and calls the provisioner.
+2. The **provisioner** runs `helm install store-<name>` using the chart it carries in its own
+   image, with a values file the platform release renders (images, sizes, domain, where the
+   gateway lives) plus the name and token. Only store + woo-mcp are enabled in that release.
+   Helm operations are queued one at a time.
+3. Setup is the same idempotent WP-CLI Job as the built-in store. The image already contains
+   WooCommerce, so a store is ready in about 1.5 minutes.
+4. The gateway's reconcile loop (every 10s) sees the release is `deployed`, adds
+   `store-<name>-woo-mcp.urumi-stores` to the SSRF allowlist, and registers the server.
+5. Delete: the gateway unregisters the server (its tools vanish at once), and the provisioner
+   removes any leftover hook Job, uninstalls the release and deletes the database volume.
+
+Isolation: stores live in the `urumi-stores` namespace. The provisioner's Role only covers
+that namespace, so it cannot read the gateway's secrets. NetworkPolicies let only the platform
+gateway reach each store's MCP server, and only a store's own WordPress reach its MariaDB.
+A ResourceQuota caps the namespace.
+
 ## How a tool call travels
 
 1. **Authenticate.** An MCP client sends `Authorization: Bearer <member key>` to `/mcp`. The

@@ -8,6 +8,7 @@ import { mcpRouter } from './mcp.js';
 import { RateLimiter } from './ratelimit.js';
 import type { Gateway } from './router.js';
 import { encrypt, hashPassword } from './security.js';
+import { StoreService } from './stores.js';
 import { UpstreamManager } from './upstreams.js';
 
 async function seed(): Promise<void> {
@@ -48,6 +49,8 @@ const upstreams = new UpstreamManager({
 await upstreams.loadAll();
 upstreams.start();
 const gw: Gateway = { upstreams, limiter: new RateLimiter(config.rateLimitPerMinute) };
+const stores = new StoreService(upstreams);
+await stores.start();
 
 const app = express();
 app.disable('x-powered-by');
@@ -63,7 +66,7 @@ app.get('/healthz', async (_req, res) => {
 });
 
 app.use('/mcp', mcpRouter(gw));
-app.use('/api', apiRouter(gw));
+app.use('/api', apiRouter(gw, stores));
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

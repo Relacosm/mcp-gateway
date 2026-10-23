@@ -1,54 +1,50 @@
 {{- if .Values.global.networkPolicies }}
 {{- /*
-Only the gateway may reach the MCP servers and its own Postgres; only
-WordPress and the store setup Job may reach MariaDB. Public entry points
-(storefront, dashboard, gateway) stay open to the Ingress controller.
+Only the gateway may reach the MCP servers, its own Postgres and the store
+provisioner; only a store's own WordPress and setup Job may reach its MariaDB.
+Public entry points (storefront, dashboard, gateway) stay open to the Ingress
+controller.
+
+A store created by the provisioner is its own release in another namespace,
+so "the gateway" is identified by its release and namespace (global.gateway),
+which default to this release.
 */ -}}
 {{- $r := .Release.Name -}}
-{{- range $target := list "woo-mcp" "utils-mcp" }}
+{{- $gwRelease := .Values.global.gateway.release | default $r -}}
+{{- $gwNamespace := .Values.global.gateway.namespace | default .Release.Namespace -}}
+{{- $targets := list -}}
+{{- if index .Values "woo-mcp" "enabled" }}{{ $targets = append $targets (dict "name" "woo-mcp" "port" 3000) }}{{ end -}}
+{{- if index .Values "utils-mcp" "enabled" }}{{ $targets = append $targets (dict "name" "utils-mcp" "port" 3000) }}{{ end -}}
+{{- if .Values.gateway.enabled }}{{ $targets = append $targets (dict "name" "gateway-postgres" "port" 5432) }}{{ end -}}
+{{- if .Values.provisioner.enabled }}{{ $targets = append $targets (dict "name" "provisioner" "port" 3000) }}{{ end -}}
+{{- range $t := $targets }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ $r }}-{{ $target }}-from-gateway
+  name: {{ $r }}-{{ $t.name }}-from-gateway
   labels: {{- include "platform.labels" $ | nindent 4 }}
 spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/instance: {{ $r }}
-      app.kubernetes.io/name: {{ $target }}
+      app.kubernetes.io/name: {{ $t.name }}
   policyTypes: [Ingress]
   ingress:
     - from:
-        - podSelector:
+        # Both selectors in one entry: gateway pods in the gateway's namespace.
+        - namespaceSelector:
             matchLabels:
-              app.kubernetes.io/instance: {{ $r }}
+              kubernetes.io/metadata.name: {{ $gwNamespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $gwRelease }}
               app.kubernetes.io/name: gateway
       ports:
-        - port: 3000
+        - port: {{ $t.port }}
           protocol: TCP
 {{- end }}
----
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ $r }}-gateway-postgres-from-gateway
-  labels: {{- include "platform.labels" . | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/instance: {{ $r }}
-      app.kubernetes.io/name: gateway-postgres
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/instance: {{ $r }}
-              app.kubernetes.io/name: gateway
-      ports:
-        - port: 5432
-          protocol: TCP
+{{- if .Values.store.enabled }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -64,6 +60,8 @@ spec:
   ingress:
     - from:
         - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $r }}
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
@@ -71,4 +69,5 @@ spec:
       ports:
         - port: 3306
           protocol: TCP
+{{- end }}
 {{- end }}

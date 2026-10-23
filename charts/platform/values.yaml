@@ -11,6 +11,11 @@ global:
   storageClass: local-path
   # Restricts who may talk to the MCP servers and the databases.
   networkPolicies: true
+  # Where the gateway runs. Empty = this release; set for stores the
+  # provisioner installs as separate releases.
+  gateway:
+    release: ""
+    namespace: ""
 
 # Every secret below is generated on first install when left empty, and kept
 # on upgrades (read back with "lookup"). Pass real values at install time with
@@ -28,6 +33,7 @@ secrets:
   gatewayDbPassword: ""
   gatewayMasterKey: ""
   gatewayAdminPassword: ""
+  provisionerToken: ""
 
 store:
   enabled: true
@@ -43,3 +49,38 @@ gateway:
 
 dashboard:
   enabled: true
+
+# Creates and deletes extra stores on request from the dashboard. Each store is
+# its own Helm release (WordPress + MariaDB + its own woo-mcp server) in a
+# separate namespace; this is the only component allowed to change it.
+provisioner:
+  enabled: true
+  image:
+    repository: urumi/provisioner
+    tag: "0.1.0"
+    pullPolicy: IfNotPresent
+  # Default: <release namespace>-stores
+  namespace: ""
+  maxStores: 3
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  # Caps what all extra stores together may use.
+  quota:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.memory: 8Gi
+    persistentvolumeclaims: "12"
+    pods: "24"
+  # Sizes for each extra store (smaller than the built-in one).
+  storeResources:
+    mariadb:
+      storage: 1Gi
+      resources:
+        requests: { cpu: 50m, memory: 192Mi }
+        limits: { cpu: 500m, memory: 512Mi }
+    wordpress:
+      storage: 1Gi
+      resources:
+        requests: { cpu: 50m, memory: 192Mi }
+        limits: { cpu: "1", memory: 512Mi }

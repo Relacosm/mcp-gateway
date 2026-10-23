@@ -33,6 +33,11 @@ Members never see the upstream servers' credentials.
    A chat in the dashboard. An LLM calls tools through the gateway, shows which
    tools it called, and acts as the logged-in user.
 
+5) Multi-store (bonus, built)
+   An admin adds a store from the dashboard. A separate provisioner creates it
+   (WordPress + MariaDB + its own Woo MCP server) and the gateway registers its
+   MCP server automatically, so its tools appear as <store>__list_orders etc.
+
 Rule: the chat agent and external clients ONLY go through the gateway. Nothing
 else talks to the upstream servers directly.
 
@@ -61,9 +66,11 @@ Local Kubernetes : k3d (k3s inside Docker). Same k3s as the VPS, so the local
                    local-path storage and NetworkPolicy enforcement.
 Packaging        : Helm only (no Kustomize). values-local.yaml and
                    values-prod.yaml hold every difference.
-Store            : official WordPress image + MariaDB, our own Helm chart.
-                   A one-time setup Job uses WP-CLI to install WooCommerce,
-                   enable COD and create the REST API key.
+Store            : WordPress 7.0 + MariaDB, our own Helm chart. Our image
+                   (services/store-wordpress) is the official WordPress image
+                   with WooCommerce 11.2.1 pre-installed, so new stores start
+                   fast. A setup Job (WP-CLI) applies each store's settings:
+                   COD, shipping, pages, sample product, REST API key.
 Woo MCP server   : Node.js + TypeScript + official MCP SDK. Talks to the store
                    through the WooCommerce REST API (wc/v3). Reason: it is the
                    official, stable, documented interface, works over the
@@ -74,12 +81,16 @@ Dashboard        : React + Vite, served as static files by nginx.
 Chat agent       : lives in the backend. Uses an OpenAI-compatible chat API so
                    the provider is just config (base URL + key + model). A free
                    tier (Gemini or Groq) or a local model (Ollama) all work.
-Other upstreams  : (a) a small "utils" MCP server we write and run in the
-                       cluster, protected by a bearer token (time, currency
-                       conversion). Good for the "kill a pod" demo.
-                   (b) one public remote MCP server that speaks Streamable HTTP
-                       (for example DeepWiki). Shows that external URLs work.
-                   Final picks get confirmed in Phase 6.
+                   Locally it is OFF until an API key is added (the local
+                   Ollama model was too slow and was removed to free RAM).
+Store provisioner: small Node service with helm + kubectl. The only component
+                   with Kubernetes write access, limited by a Role to the
+                   separate stores namespace (urumi-stores).
+Other upstreams  : (a) utils MCP server we wrote, in the cluster, bearer token
+                       (get_time, convert_currency). Used for the "kill a pod"
+                       demo.
+                   (b) DeepWiki (https://mcp.deepwiki.com/mcp), public remote
+                       MCP server over Streamable HTTP.
 
 
 5. KEY DESIGN DECISIONS
@@ -118,10 +129,25 @@ Audit log
    Chat agent calls are logged under the logged-in user.
 
 Network isolation
-   - Public through Ingress: storefront and dashboard (+ the gateway endpoint).
-   - Internal only: databases, Woo MCP server, utils MCP server.
+   - Public through Ingress: storefronts and dashboard (+ the gateway endpoint).
+   - Internal only: databases, Woo MCP servers, utils MCP server, provisioner.
    - Enforced by ClusterIP services (no Ingress) plus NetworkPolicies that
-     allow only the gateway to reach the MCP servers.
+     allow only the gateway to reach the MCP servers and the provisioner, and
+     only a store's own WordPress to reach its database.
+
+Multi-store
+   - One MCP server per store (not one server with a "store" field), so every
+     per-server control (status, disable, read-only, metrics, audit) works per
+     store, and adding/removing a store never touches the others.
+   - Stores are created from the admin dashboard. The gateway does NOT get
+     Kubernetes access; it asks the provisioner, which runs
+     "helm install store-<name>" with the same platform chart (store + woo-mcp
+     only) into the urumi-stores namespace. When the release is ready, the
+     gateway registers http://store-<name>-woo-mcp.urumi-stores:3000/mcp with
+     a token it generated (stored encrypted).
+   - A ResourceQuota caps all extra stores together; maxStores (default 3)
+     caps the count. Deleting a store removes its release, data volumes and
+     its tools.
 
 Secrets
    Nothing hardcoded in source. DB passwords, WooCommerce API keys, the
@@ -146,16 +172,20 @@ Images           imported into k3d           pulled from a registry
 ----------------------
   charts/
     platform/              umbrella chart, values-local.yaml, values-prod.yaml
+      templates/           shared secrets, NetworkPolicies, provisioner + RBAC
       charts/store/        WordPress + MariaDB + setup Job
       charts/woo-mcp/
       charts/utils-mcp/
       charts/gateway/      backend + Postgres
       charts/dashboard/
   services/
+    store-wordpress/       WordPress image with WooCommerce pre-installed
     woo-mcp/               WooCommerce MCP server
     utils-mcp/             second upstream server
-    gateway/               backend, gateway, chat agent
+    gateway/               backend, gateway, chat agent, store registration
     dashboard/             React app
+    provisioner/           creates/deletes store releases with Helm
+  scripts/                 build-images.sh, place-order.sh, dod-check.mjs
   docs/
     system-design.md
     threat-model.md
@@ -210,3 +240,20 @@ Team and control
   descriptions, what one member can do to another).
 - A list of any bonus or stand-out items attempted and where to find them.
 - Demo video.
+
+
+11. CURRENT STATUS (2026-10-24)
+-------------------------------
+Built and verified on local k3d:
+- Phases 0-8 done. Fresh "helm install" brings everything up; the automated
+  checklist (node scripts/dod-check.mjs) passed 12/12 with users A and B.
+- Phase 10: role permissions, SSRF guard, rate limits + metrics, and
+  multi-store (dashboard "Stores" page -> provisioner -> auto-registered MCP
+  server; a new store is ready in ~1.5 min) are done.
+- Code is on GitHub: https://github.com/Relacosm/mcp-gateway
+
+Still to do (by the user):
+- Add an LLM API key (e.g. Groq) so the chat agent works; it is off locally.
+- Click through the dashboard once in a browser.
+- VPS deploy (prod values ready), demo video, submit.
+

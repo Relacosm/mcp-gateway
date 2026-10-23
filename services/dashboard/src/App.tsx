@@ -6,12 +6,14 @@ import { Members } from './pages/Members';
 import { Keys } from './pages/Keys';
 import { Audit } from './pages/Audit';
 import { Chat } from './pages/Chat';
+import { Stores } from './pages/Stores';
 
-type Page = 'chat' | 'servers' | 'keys' | 'audit' | 'members';
+type Page = 'chat' | 'servers' | 'stores' | 'keys' | 'audit' | 'members';
 
 const PAGES: { id: Page; label: string; adminOnly?: boolean }[] = [
   { id: 'chat', label: 'Chat' },
   { id: 'servers', label: 'Servers' },
+  { id: 'stores', label: 'Stores', adminOnly: true },
   { id: 'keys', label: 'API keys' },
   { id: 'audit', label: 'Audit log' },
   { id: 'members', label: 'Members', adminOnly: true },
@@ -68,6 +70,7 @@ export function App() {
       <main>
         {active === 'chat' && <Chat me={me} />}
         {active === 'servers' && <Servers isAdmin={isAdmin} />}
+        {active === 'stores' && isAdmin && <Stores />}
         {active === 'keys' && <Keys me={me} />}
         {active === 'audit' && <Audit isAdmin={isAdmin} />}
         {active === 'members' && isAdmin && <Members me={me} />}

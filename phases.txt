@@ -94,7 +94,7 @@ Done when
   - No API response contains an upstream credential (check the network tab).
 
 
-PHASE 5 - Chat agent   [DONE - see note on local model quality]
+PHASE 5 - Chat agent   [DONE - needs an LLM API key; local Ollama removed]
 --------------------
 Tasks
   - Backend chat endpoint with the tool loop:
@@ -162,7 +162,7 @@ Done when
   - Every box in section 8 of project_context.txt is ticked on camera.
 
 
-PHASE 10 - Optional extras (only after the core works end to end)   [2, 3, 4 DONE; 1 needs a VPS; 5 not done]
+PHASE 10 - Optional extras (only after the core works end to end)   [2, 3, 4, 5 DONE; 1 needs a VPS]
 -----------------------------------------------------------------
 Pick by value for effort, in this order:
   1. Real VPS deploy on k3s with TLS (the prod values already exist).

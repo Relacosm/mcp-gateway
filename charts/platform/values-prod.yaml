@@ -23,6 +23,8 @@ certManager:
   email: ops@example.com
 
 store:
+  images:
+    wordpress: ghcr.io/relacosm/urumi-store-wordpress:0.1.0
   admin:
     email: ops@example.com
   mariadb:
@@ -74,6 +76,13 @@ gateway:
     resources:
       requests: { cpu: 100m, memory: 256Mi }
       limits: { cpu: "1", memory: 1Gi }
+
+provisioner:
+  image:
+    repository: ghcr.io/relacosm/urumi-provisioner
+    tag: "0.1.0"
+  # Each store is <name>.<domain>: add a wildcard DNS record (*.<domain>).
+  maxStores: 5
 
 dashboard:
   image:

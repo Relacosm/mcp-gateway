@@ -65,6 +65,16 @@ CREATE INDEX IF NOT EXISTS audit_log_created_idx ON audit_log (created_at DESC);
 
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS members_read_only BOOLEAN NOT NULL DEFAULT false;
 
+-- Extra stores created from the dashboard. token_enc is the bearer token the
+-- store's MCP server requires; server_id is set once the store is registered.
+CREATE TABLE IF NOT EXISTS stores (
+  name       TEXT PRIMARY KEY,
+  token_enc  TEXT NOT NULL,
+  server_id  INT REFERENCES servers(id) ON DELETE SET NULL,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

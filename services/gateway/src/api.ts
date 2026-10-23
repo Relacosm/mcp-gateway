@@ -6,6 +6,7 @@ import { query } from './db.js';
 import type { Gateway } from './router.js';
 import { encrypt, hashPassword, newApiKey, verifyPassword } from './security.js';
 import { assertPublicUrl, SsrfError } from './ssrf.js';
+import type { StoreService } from './stores.js';
 import type { ServerRow } from './upstreams.js';
 
 // Burns the same scrypt time for unknown emails, so login timing does not leak which emails exist.
@@ -69,7 +70,7 @@ async function checkUrl(url: string): Promise<void> {
 }
 const serverUpdate = z.object(serverBase).partial();
 
-export function apiRouter(gw: Gateway): Router {
+export function apiRouter(gw: Gateway, stores: StoreService): Router {
   const { upstreams } = gw;
   const api = Router();
   api.use(sessionUser);
@@ -263,6 +264,25 @@ export function apiRouter(gw: Gateway): Router {
     const id = idParam(req);
     await upstreams.refresh(id);
     res.json(upstreams.describe().find((s) => s.id === id) ?? null);
+  });
+
+  // ---- extra stores (admin): one Helm release + one MCP server each
+  api.get('/stores', requireAdmin, async (_req, res) => {
+    if (!stores.enabled) {
+      res.json({ enabled: false, stores: [] });
+      return;
+    }
+    res.json({ enabled: true, stores: await stores.list() });
+  });
+
+  api.post('/stores', requireAdmin, async (req, res) => {
+    const { name } = z.object({ name: z.string() }).parse(req.body);
+    res.status(202).json(await stores.create(name.trim().toLowerCase(), req.user!));
+  });
+
+  api.delete('/stores/:name', requireAdmin, async (req, res) => {
+    await stores.remove(String(req.params.name));
+    res.json({ ok: true });
   });
 
   // ---- audit log (admins see everyone, members see their own calls)

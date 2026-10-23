@@ -46,6 +46,9 @@ export const config = {
   llmApiKey: process.env.LLM_API_KEY ?? '',
   llmTimeoutMs: Number(process.env.LLM_TIMEOUT_MS ?? 90000),
   chatMaxSteps: Number(process.env.CHAT_MAX_STEPS ?? 6),
+  // Store provisioner; the Stores feature is off when either is empty.
+  provisionerUrl: (process.env.PROVISIONER_URL ?? '').replace(/\/$/, ''),
+  provisionerToken: process.env.PROVISIONER_TOKEN ?? '',
   // Run one tool call per LLM step. Small models often fire dependent calls in
   // parallel with made-up arguments; this makes them see each result first.
   chatSequentialTools: process.env.CHAT_SEQUENTIAL_TOOLS === 'true',

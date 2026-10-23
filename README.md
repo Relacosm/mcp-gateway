@@ -30,6 +30,8 @@ an MCP server we wrote.
 | Utils MCP server | `services/utils-mcp` | `get_time`, `convert_currency`; bearer-token protected |
 | Gateway | `services/gateway` | Express + official MCP SDK, Postgres, chat agent |
 | Dashboard | `services/dashboard` | React + Vite, served by nginx |
+| Store provisioner | `services/provisioner` | creates/deletes extra stores (one Helm release + one MCP server each) |
+| Store image | `services/store-wordpress` | WordPress 7.0 with WooCommerce pre-installed |
 | Helm | `charts/platform` | one umbrella chart, `values-local.yaml` / `values-prod.yaml` |
 
 Design notes: [docs/system-design.md](docs/system-design.md) · Threat model: [docs/threat-model.md](docs/threat-model.md)
@@ -44,7 +46,7 @@ Needs Docker Desktop (give it 6 GB+ RAM), [k3d](https://k3d.io), kubectl, Helm 3
 # 1. cluster: k3s in Docker, Traefik published on host ports 80/443
 k3d cluster create --config k3d/cluster.yaml
 
-# 2. build our four images and import them into the cluster
+# 2. build our images and import them into the cluster
 scripts/build-images.sh
 
 # 3. install everything (the store setup Job takes a few minutes the first time)
@@ -74,10 +76,9 @@ kubectl -n urumi get secret platform-store-admin -o jsonpath='{.data.password}' 
 The chat agent talks to any OpenAI-compatible API; the provider is config only
 (`gateway.llm.baseUrl`, `gateway.llm.model`, and the key in `secrets.llmApiKey`).
 
-- **Local default:** Ollama on your machine (`ollama pull llama3.2:3b`), reached from the
-  cluster at `host.docker.internal:11434`. Works, but a 3B model on CPU is slow (1–2 min per
-  turn) and weak at chaining tools.
-- **Better:** a free hosted tier, for example Groq:
+- **Local default: off.** `values-local.yaml` leaves the provider empty, so the chat says it
+  is not configured until you add one.
+- **Recommended:** a free hosted tier, for example Groq:
 
 ```bash
 helm upgrade platform charts/platform -n urumi -f charts/platform/values-local.yaml \
@@ -149,6 +150,24 @@ in the audit log with `via = chat`.
 - **Audit log:** every tool call (user, server, tool, time, duration, outcome); filter by
   user and server.
 
+### Add a store (multi-store)
+
+Dashboard → **Stores** (admin) → enter a name such as `bakery` → **Create store**. About 1.5
+minutes later the store is live at http://bakery.localtest.me and its MCP server is registered,
+so everyone sees `bakery__list_orders`, `bakery__create_product`, and so on. **Delete** removes
+the store, its data and its tools.
+
+How it works: the gateway asks the **provisioner**, which runs `helm install store-<name>` with
+the same chart (store + woo-mcp only) in the `urumi-stores` namespace. Only the provisioner has
+Kubernetes write access, and only in that namespace. A ResourceQuota and `provisioner.maxStores`
+(default 3) cap the total.
+
+wp-admin password of a store:
+
+```bash
+kubectl -n urumi-stores get secret store-<name>-store-admin -o jsonpath='{.data.password}' | base64 -d
+```
+
 ### Run the whole checklist
 
 ```bash
@@ -178,9 +197,10 @@ helm install cert-manager jetstack/cert-manager -n cert-manager --create-namespa
 Push the images to a registry (from your machine):
 
 ```bash
-for s in woo-mcp utils-mcp gateway dashboard; do
+for s in store-wordpress woo-mcp utils-mcp gateway dashboard; do
   docker build -t ghcr.io/<you>/urumi-$s:0.1.0 services/$s && docker push ghcr.io/<you>/urumi-$s:0.1.0
 done
+docker build -t ghcr.io/<you>/urumi-provisioner:0.1.0 -f services/provisioner/Dockerfile .   && docker push ghcr.io/<you>/urumi-provisioner:0.1.0
 ```
 
 Edit `charts/platform/values-prod.yaml` (domain, `certManager.email`, image repositories),
@@ -208,6 +228,8 @@ helm upgrade --install platform charts/platform -n urumi --create-namespace \
 | Prompt-injection hardening in the chat agent | `services/gateway/src/chat.ts`, threat model |
 | Production values with cert-manager TLS | `charts/platform/values-prod.yaml`, `templates/cluster-issuer.yaml` |
 | Automated Definition of Done check | `scripts/dod-check.mjs` |
+| Multi-store: add/delete stores from the dashboard; one MCP server per store, auto-registered | `services/provisioner`, `services/gateway/src/stores.ts`, Stores page, `templates/provisioner.yaml` |
+| Pre-built store image (WooCommerce baked in, per-store settings still applied) | `services/store-wordpress` |
 
 Not done: a real VPS deploy (the prod values render and are ready, but no server was
-available), and multi-store provisioning.
+available).

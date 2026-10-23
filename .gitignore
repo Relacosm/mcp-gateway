@@ -27,3 +27,6 @@ npm-debug.log*
 
 # local tool state
 .serena/
+
+# personal notes
+concepts.txt

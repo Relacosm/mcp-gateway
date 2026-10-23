@@ -7,3 +7,9 @@ global:
     className: traefik
     tls: false
   storageClass: local-path
+
+# Chat agent off until an LLM key is added (see README "Chat agent provider").
+gateway:
+  llm:
+    baseUrl: ""
+    model: ""

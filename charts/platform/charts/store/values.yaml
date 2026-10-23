@@ -3,7 +3,8 @@ host: store
 
 images:
   mariadb: mariadb:11.4
-  wordpress: wordpress:7.0-php8.3-apache
+  # WordPress 7.0 with WooCommerce pre-installed (services/store-wordpress).
+  wordpress: urumi/store-wordpress:0.1.0
   cli: wordpress:cli-php8.3
 
 admin:
@@ -20,7 +21,7 @@ site:
   postcode: "560001"
 
 woocommerce:
-  # Empty = latest from wordpress.org
+  # Only used if the image has no WooCommerce baked in. Empty = latest.
   version: ""
 
 mariadb:

@@ -97,6 +97,12 @@ spec:
               value: {{ .Values.llm.sequentialTools | quote }}
             - name: CHAT_MAX_STEPS
               value: {{ .Values.llm.maxSteps | quote }}
+            # Store provisioner (only present when provisioner.enabled).
+            - name: PROVISIONER_URL
+              value: "http://{{ $r }}-provisioner:3000"
+            - name: PROVISIONER_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ $r }}-provisioner-token, key: token, optional: true }
             - name: LLM_API_KEY
               valueFrom:
                 secretKeyRef: { name: {{ $r }}-llm, key: api-key, optional: true }

@@ -1,0 +1,184 @@
+{{- if .Values.provisioner.enabled }}
+{{- /*
+The store provisioner. Extra stores live in their own namespace, and the
+provisioner's permissions are limited to that namespace, so neither it nor a
+store can touch the gateway, its database or its secrets.
+*/ -}}
+{{- $r := .Release.Name -}}
+{{- $name := printf "%s-provisioner" $r -}}
+{{- $storesNs := .Values.provisioner.namespace | default (printf "%s-stores" .Release.Namespace) -}}
+{{- $store := .Values.store -}}
+{{- $woo := index .Values "woo-mcp" -}}
+{{- /* Values every extra store is installed with; the provisioner adds the name and token. */ -}}
+{{- $storeValues := dict
+  "global" (merge (dict "gateway" (dict "release" $r "namespace" .Release.Namespace)) (deepCopy .Values.global))
+  "certManager" (dict "createClusterIssuer" false)
+  "store" (merge (dict "enabled" true "images" $store.images "site" $store.site "admin" $store.admin) (deepCopy .Values.provisioner.storeResources))
+  "woo-mcp" (dict "enabled" true "image" $woo.image "storeTimezone" $woo.storeTimezone)
+  "utils-mcp" (dict "enabled" false)
+  "gateway" (dict "enabled" false)
+  "dashboard" (dict "enabled" false)
+  "provisioner" (dict "enabled" false) -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $storesNs }}
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+---
+# Caps what all extra stores together may request.
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: stores-quota
+  namespace: {{ $storesNs }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  hard:
+    {{- toYaml .Values.provisioner.quota | nindent 4 }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+---
+# Everything a store release contains, in the stores namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $storesNs }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets, configmaps, services, persistentvolumeclaims, pods, serviceaccounts]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [events, pods/log]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [deployments, statefulsets, replicasets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses, networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $storesNs }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $name }}-store-values
+  labels: {{- include "platform.labels" . | nindent 4 }}
+data:
+  store-values.yaml: |
+    {{- toYaml $storeValues | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: provisioner
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ $r }}
+    app.kubernetes.io/name: provisioner
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "platform.labels" . | nindent 4 }}
+    app.kubernetes.io/name: provisioner
+spec:
+  replicas: 1
+  # One instance at a time: it serializes Helm operations in memory.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $r }}
+      app.kubernetes.io/name: provisioner
+  template:
+    metadata:
+      labels:
+        {{- include "platform.labels" . | nindent 8 }}
+        app.kubernetes.io/name: provisioner
+      annotations:
+        # Restart when the shared store values change.
+        checksum/store-values: {{ toYaml $storeValues | sha256sum }}
+    spec:
+      serviceAccountName: {{ $name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: provisioner
+          image: "{{ .Values.provisioner.image.repository }}:{{ .Values.provisioner.image.tag }}"
+          imagePullPolicy: {{ .Values.provisioner.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: STORES_NAMESPACE
+              value: {{ $storesNs }}
+            - name: DOMAIN
+              value: {{ .Values.global.domain | quote }}
+            - name: TLS
+              value: {{ .Values.global.ingress.tls | quote }}
+            - name: MAX_STORES
+              value: {{ .Values.provisioner.maxStores | quote }}
+            - name: VALUES_FILE
+              value: /config/store-values.yaml
+            - name: PROVISIONER_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ $r }}-provisioner-token, key: token }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: tmp
+              mountPath: /tmp
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.provisioner.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $name }}-store-values
+        - name: tmp
+          emptyDir: {}
+{{- end }}

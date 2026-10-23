@@ -31,6 +31,12 @@ for (const [net, bits] of [
 
 export class SsrfError extends Error {}
 
+// In-cluster hosts added at runtime (the MCP servers of provisioned stores).
+const runtimeAllowed = new Set<string>();
+export function allowInternalHost(host: string): void {
+  runtimeAllowed.add(host.toLowerCase());
+}
+
 function isBlocked(address: string): boolean {
   const family = isIP(address) === 6 ? 'ipv6' : 'ipv4';
   // IPv4-mapped IPv6 (::ffff:10.0.0.1) is checked as IPv4.
@@ -45,7 +51,7 @@ export async function assertPublicUrl(raw: string | URL): Promise<void> {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new SsrfError('only http and https URLs are allowed');
   if (!config.ssrfProtection) return;
   const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (config.allowedInternalHosts.includes(host)) return;
+  if (config.allowedInternalHosts.includes(host) || runtimeAllowed.has(host)) return;
 
   const addresses = isIP(host) ? [host] : (await lookup(host, { all: true }).catch(() => [])).map((a) => a.address);
   if (addresses.length === 0) throw new SsrfError(`cannot resolve host '${host}'`);
