@@ -6,4 +6,40 @@ global:
   ingress:
     className: traefik
     tls: false
+    # Extra annotations on every Ingress (e.g. cert-manager in prod).
+    annotations: {}
   storageClass: local-path
+  # Restricts who may talk to the MCP servers and the databases.
+  networkPolicies: true
+
+# Every secret below is generated on first install when left empty, and kept
+# on upgrades (read back with "lookup"). Pass real values at install time with
+# --set or an untracked *.secret.yaml file; never commit them.
+secrets:
+  storeDbRootPassword: ""
+  storeDbPassword: ""
+  storeAdminPassword: ""
+  wooConsumerKey: ""
+  wooConsumerSecret: ""
+  wooMcpToken: ""
+  utilsMcpToken: ""
+  # The chat agent's LLM key; leave empty for a provider that needs none.
+  llmApiKey: ""
+  gatewayDbPassword: ""
+  gatewayMasterKey: ""
+  gatewayAdminPassword: ""
+
+store:
+  enabled: true
+
+woo-mcp:
+  enabled: true
+
+utils-mcp:
+  enabled: true
+
+gateway:
+  enabled: true
+
+dashboard:
+  enabled: true

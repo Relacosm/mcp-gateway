@@ -17,8 +17,8 @@ Done when
   - "helm install" of the empty chart succeeds.
 
 
-PHASE 1 - Store on Kubernetes
------------------------------
+PHASE 1 - Store on Kubernetes   [DONE]
+--------------------------------------
 Tasks
   - Helm chart: MariaDB (StatefulSet + PVC) and WordPress (Deployment + PVC).
   - Secrets for DB and WordPress admin passwords, taken from values.
@@ -33,7 +33,7 @@ Done when
   - Deleting the WordPress and MariaDB pods loses no data.
 
 
-PHASE 2 - WooCommerce MCP server
+PHASE 2 - WooCommerce MCP server   [DONE]
 --------------------------------
 Tasks
   - Node/TypeScript service using the MCP SDK, Streamable HTTP transport.
@@ -48,7 +48,7 @@ Done when
   - list_orders returns the order placed in Phase 1.
 
 
-PHASE 3 - Gateway backend  <- the biggest phase
+PHASE 3 - Gateway backend  <- the biggest phase   [DONE]
 -----------------------------------------------
 3a. Foundations
   - Postgres chart + schema: users, api_keys, servers, audit_log.
@@ -82,7 +82,7 @@ Done when
   - Each call has a correct audit row.
 
 
-PHASE 4 - Dashboard
+PHASE 4 - Dashboard   [DONE - API verified; browser click-through by you]
 -------------------
 Tasks
   - React + Vite app, nginx image, Helm chart, Ingress at gateway.localtest.me.
@@ -94,7 +94,7 @@ Done when
   - No API response contains an upstream credential (check the network tab).
 
 
-PHASE 5 - Chat agent
+PHASE 5 - Chat agent   [DONE - see note on local model quality]
 --------------------
 Tasks
   - Backend chat endpoint with the tool loop:
@@ -109,7 +109,7 @@ Done when
   - Both calls are in the audit log under user A.
 
 
-PHASE 6 - Two more upstream servers
+PHASE 6 - Two more upstream servers   [DONE]
 -----------------------------------
 Tasks
   - Write and deploy the small in-cluster "utils" MCP server (bearer token).
@@ -123,7 +123,7 @@ Done when
   - Killing the utils pod: woo tools still work, dashboard shows Unreachable.
 
 
-PHASE 7 - Kubernetes polish and production values
+PHASE 7 - Kubernetes polish and production values   [DONE]
 -------------------------------------------------
 Tasks
   - Check every workload: readiness, liveness, requests, limits, non-root.
@@ -138,7 +138,7 @@ Done when
   - "helm template" with values-prod.yaml renders without errors.
 
 
-PHASE 8 - Docs
+PHASE 8 - Docs   [DONE]
 --------------
 Tasks
   - README: local setup, VPS setup, place an order, connect an MCP client,
@@ -150,7 +150,7 @@ Done when
   - Following only the README on a clean cluster gets a working system.
 
 
-PHASE 9 - Full rehearsal, demo video, submit
+PHASE 9 - Full rehearsal, demo video, submit   [REHEARSAL AUTOMATED - scripts/dod-check.mjs; video + submit by you]
 --------------------------------------------
 Tasks
   - Run the whole Definition of Done checklist start to finish with users A
@@ -162,7 +162,7 @@ Done when
   - Every box in section 8 of project_context.txt is ticked on camera.
 
 
-PHASE 10 - Optional extras (only after the core works end to end)
+PHASE 10 - Optional extras (only after the core works end to end)   [2, 3, 4 DONE; 1 needs a VPS; 5 not done]
 -----------------------------------------------------------------
 Pick by value for effort, in this order:
   1. Real VPS deploy on k3s with TLS (the prod values already exist).

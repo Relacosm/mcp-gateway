@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-store-setup
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/name: store-setup
+data:
+  setup.sh: |
+    {{- .Files.Get "files/setup.sh" | nindent 4 }}
+  apikey.php: |
+    {{- .Files.Get "files/apikey.php" | nindent 4 }}
+---
+# Runs after every install/upgrade. Each step is idempotent.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-store-setup
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/name: store-setup
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    # Deleted once it succeeds, so it never holds the content volume after an
+    # uninstall; a failed run is kept for its logs.
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 4
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        {{- include "store.labels" . | nindent 8 }}
+        app.kubernetes.io/name: store-setup
+    spec:
+      restartPolicy: OnFailure
+      # Same uid as the WordPress image's www-data, which owns the content volume.
+      securityContext:
+        runAsUser: 33
+        runAsGroup: 33
+        runAsNonRoot: true
+      containers:
+        - name: setup
+          image: {{ .Values.images.cli }}
+          command: ["sh", "/setup/setup.sh"]
+          securityContext:
+            allowPrivilegeEscalation: false
+          env:
+            {{- include "store.wpDbEnv" . | nindent 12 }}
+            - name: HOME
+              value: /tmp
+            - name: WP_CLI_CACHE_DIR
+              value: /tmp/wp-cli-cache
+            - name: WP_CLI_PHP_ARGS
+              value: "-d memory_limit=512M"
+            - name: SITE_URL
+              value: {{ include "store.url" . | quote }}
+            - name: SITE_TITLE
+              value: {{ .Values.site.title | quote }}
+            - name: TIMEZONE
+              value: {{ .Values.site.timezone | quote }}
+            - name: COUNTRY
+              value: {{ .Values.site.country | quote }}
+            - name: CURRENCY
+              value: {{ .Values.site.currency | quote }}
+            - name: ADDRESS
+              value: {{ .Values.site.address | quote }}
+            - name: CITY
+              value: {{ .Values.site.city | quote }}
+            - name: POSTCODE
+              value: {{ .Values.site.postcode | quote }}
+            - name: WC_VERSION
+              value: {{ .Values.woocommerce.version | quote }}
+            - name: ADMIN_USER
+              value: {{ .Values.admin.username | quote }}
+            - name: ADMIN_EMAIL
+              value: {{ .Values.admin.email | quote }}
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-store-admin, key: password }
+            - name: WC_CONSUMER_KEY
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-woo-api, key: consumer-key }
+            - name: WC_CONSUMER_SECRET
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-woo-api, key: consumer-secret }
+          volumeMounts:
+            - name: content
+              mountPath: /var/www/html
+            - name: script
+              mountPath: /setup
+          resources:
+            {{- toYaml .Values.setup.resources | nindent 12 }}
+      volumes:
+        - name: content
+          persistentVolumeClaim:
+            claimName: {{ include "store.wp" . }}
+        - name: script
+          configMap:
+            name: {{ .Release.Name }}-store-setup

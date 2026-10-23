@@ -1,0 +1,6 @@
+apiVersion: v2
+name: store
+description: WordPress + WooCommerce + MariaDB, with a one-time WP-CLI setup Job
+type: application
+version: 0.1.0
+appVersion: "7.0"

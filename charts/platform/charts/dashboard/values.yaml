@@ -1,0 +1,14 @@
+# Same host as the gateway (gateway.<global.domain>); the gateway Ingress
+# takes /api and /mcp, this one takes everything else.
+host: gateway
+
+image:
+  repository: urumi/dashboard
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+resources:
+  requests: { cpu: 10m, memory: 16Mi }
+  limits: { cpu: 200m, memory: 64Mi }

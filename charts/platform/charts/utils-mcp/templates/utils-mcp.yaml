@@ -1,0 +1,67 @@
+{{- $name := printf "%s-utils-mcp" .Release.Name -}}
+# ClusterIP only, no Ingress: the gateway is the only allowed caller (see the NetworkPolicy).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/part-of: platform
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: utils-mcp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: utils-mcp
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/part-of: platform
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/name: utils-mcp
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: utils-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: platform
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: utils-mcp
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: utils-mcp
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+          env:
+            - name: MCP_TOKEN
+              valueFrom:
+                secretKeyRef: { name: {{ .Release.Name }}-utils-mcp-token, key: token }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

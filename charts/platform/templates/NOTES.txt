@@ -1,2 +1,11 @@
 Release {{ .Release.Name }} installed in namespace {{ .Release.Namespace }}.
 Base domain: {{ .Values.global.domain }}
+
+Storefront : http://{{ .Values.store.host | default "store" }}.{{ .Values.global.domain }}
+WP admin   : http://{{ .Values.store.host | default "store" }}.{{ .Values.global.domain }}/wp-admin  (user: {{ dig "admin" "username" "admin" .Values.store }})
+Dashboard  : http://{{ .Values.gateway.host | default "gateway" }}.{{ .Values.global.domain }}  (user: {{ dig "admin" "email" "admin@example.com" .Values.gateway }})
+MCP URL    : http://{{ .Values.gateway.host | default "gateway" }}.{{ .Values.global.domain }}/mcp
+
+Passwords (generated on first install unless you passed them in):
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Release.Name }}-store-admin -o jsonpath='{.data.password}' | base64 -d
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Release.Name }}-gateway -o jsonpath='{.data.admin-password}' | base64 -d

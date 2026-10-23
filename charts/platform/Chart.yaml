@@ -4,5 +4,20 @@ description: Team MCP gateway with a WooCommerce store, as one umbrella chart
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-# Subcharts (store, woo-mcp, utils-mcp, gateway, dashboard) live in ./charts
-# and are added phase by phase.
+# Subcharts live unpacked in ./charts, so no "helm dependency update" is needed.
+dependencies:
+  - name: store
+    version: 0.1.0
+    condition: store.enabled
+  - name: woo-mcp
+    version: 0.1.0
+    condition: woo-mcp.enabled
+  - name: utils-mcp
+    version: 0.1.0
+    condition: utils-mcp.enabled
+  - name: gateway
+    version: 0.1.0
+    condition: gateway.enabled
+  - name: dashboard
+    version: 0.1.0
+    condition: dashboard.enabled

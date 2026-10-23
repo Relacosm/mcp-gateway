@@ -1,0 +1,74 @@
+{{- if .Values.global.networkPolicies }}
+{{- /*
+Only the gateway may reach the MCP servers and its own Postgres; only
+WordPress and the store setup Job may reach MariaDB. Public entry points
+(storefront, dashboard, gateway) stay open to the Ingress controller.
+*/ -}}
+{{- $r := .Release.Name -}}
+{{- range $target := list "woo-mcp" "utils-mcp" }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $r }}-{{ $target }}-from-gateway
+  labels: {{- include "platform.labels" $ | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $r }}
+      app.kubernetes.io/name: {{ $target }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $r }}
+              app.kubernetes.io/name: gateway
+      ports:
+        - port: 3000
+          protocol: TCP
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $r }}-gateway-postgres-from-gateway
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $r }}
+      app.kubernetes.io/name: gateway-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $r }}
+              app.kubernetes.io/name: gateway
+      ports:
+        - port: 5432
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $r }}-store-mariadb-from-wordpress
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $r }}
+      app.kubernetes.io/name: store-mariadb
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [store-wordpress, store-setup]
+      ports:
+        - port: 3306
+          protocol: TCP
+{{- end }}

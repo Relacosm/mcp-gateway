@@ -1,0 +1,14 @@
+image:
+  repository: urumi/woo-mcp
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicas: 1
+# Storefront subdomain (keep in sync with store.host); used in product links.
+storeHost: store
+# Used to work out "today" for order queries; keep in sync with store.site.timezone.
+storeTimezone: Asia/Kolkata
+
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { cpu: 500m, memory: 256Mi }

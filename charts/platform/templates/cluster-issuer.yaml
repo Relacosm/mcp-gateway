@@ -1,0 +1,18 @@
+{{- if and .Values.global.ingress.tls (dig "createClusterIssuer" false (.Values.certManager | default dict)) }}
+# Let's Encrypt via HTTP-01 through Traefik. Needs cert-manager installed first.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: {{ required "certManager.email is required" .Values.certManager.email }}
+    privateKeySecretRef:
+      name: letsencrypt-account-key
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: {{ .Values.global.ingress.className }}
+{{- end }}

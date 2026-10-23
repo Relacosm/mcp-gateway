@@ -1,0 +1,41 @@
+# Public host is <host>.<global.domain>
+host: store
+
+images:
+  mariadb: mariadb:11.4
+  wordpress: wordpress:7.0-php8.3-apache
+  cli: wordpress:cli-php8.3
+
+admin:
+  username: admin
+  email: admin@example.com
+
+site:
+  title: Urumi Store
+  timezone: Asia/Kolkata
+  country: "IN:KA"
+  currency: INR
+  address: "1 MG Road"
+  city: Bengaluru
+  postcode: "560001"
+
+woocommerce:
+  # Empty = latest from wordpress.org
+  version: ""
+
+mariadb:
+  storage: 2Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 512Mi }
+
+wordpress:
+  storage: 2Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 768Mi }
+
+setup:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: "1", memory: 768Mi }

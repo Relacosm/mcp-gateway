@@ -1,0 +1,55 @@
+# Public host is <host>.<global.domain>; the gateway serves /api and /mcp there,
+# the dashboard serves everything else on the same host.
+host: gateway
+
+image:
+  repository: urumi/gateway
+  tag: "0.1.0"
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+# First admin. Their password lives in the <release>-gateway Secret.
+admin:
+  email: admin@example.com
+
+# Chat agent: any OpenAI-compatible chat completions API; the key is in the
+# <release>-llm Secret (secrets.llmApiKey). Local default: Ollama on the host.
+llm:
+  baseUrl: http://host.docker.internal:11434/v1
+  model: llama3.2:3b
+  maxSteps: 6
+  # Generous for a CPU-only local model; hosted providers answer in seconds.
+  timeoutMs: 240000
+  # One tool call per step, for small models that guess dependent arguments.
+  sequentialTools: false
+
+# Registered once on first start, in addition to the in-cluster woo and utils
+# servers. Remove one in the dashboard and it stays removed.
+extraSeedServers:
+  - name: DeepWiki
+    slug: deepwiki
+    url: https://mcp.deepwiki.com/mcp
+
+# SSRF guard for admin-entered server URLs. In-cluster MCP services of this
+# release are always allowed; add other trusted internal hostnames here.
+ssrfProtection: true
+allowedInternalHosts: []
+
+# Tool calls per API key (or per user's chat) per minute. 0 = unlimited.
+rateLimitPerMinute: 60
+
+callTimeoutMs: 15000
+healthTimeoutMs: 5000
+healthIntervalMs: 10000
+
+resources:
+  requests: { cpu: 50m, memory: 96Mi }
+  limits: { cpu: 500m, memory: 384Mi }
+
+postgres:
+  image: postgres:17-alpine
+  storage: 1Gi
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 512Mi }
