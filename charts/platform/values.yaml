@@ -8,6 +8,9 @@ global:
     tls: false
     # Extra annotations on every Ingress (e.g. cert-manager in prod).
     annotations: {}
+    # Where the ingress controller runs; the only outside source allowed to
+    # reach a storefront (k3s: Traefik in kube-system).
+    controllerNamespace: kube-system
   storageClass: local-path
   # Restricts who may talk to the MCP servers and the databases.
   networkPolicies: true
@@ -46,32 +49,53 @@ utils-mcp:
 
 gateway:
   enabled: true
+  # Extra stores one user (admin or member) may own at a time.
+  maxStoresPerUser: 2
 
 dashboard:
   enabled: true
 
 # Creates and deletes extra stores on request from the dashboard. Each store is
-# its own Helm release (WordPress + MariaDB + its own woo-mcp server) in a
-# separate namespace; this is the only component allowed to change it.
+# its own namespace with its own Helm release (WordPress + MariaDB + its own
+# woo-mcp server), quota and limits; this is the only component allowed to
+# change them.
 provisioner:
   enabled: true
   image:
     repository: urumi/provisioner
     tag: "0.1.0"
     pullPolicy: IfNotPresent
-  # Default: <release namespace>-stores
-  namespace: ""
+  # Store "bakery" goes in namespace <prefix>bakery. Default: <release namespace>-store-
+  namespacePrefix: ""
+  # Total number of extra stores (the per-user cap is gateway.maxStoresPerUser).
   maxStores: 3
+  # Installs running at the same time; more wait in a queue.
+  parallelInstalls: 2
+  # A store that is not ready by then is marked Failed (and can be retried).
+  installTimeoutSeconds: 600
+  # Fences the provisioner's cluster-wide rights into its store namespaces
+  # (ValidatingAdmissionPolicy, Kubernetes 1.30+).
+  admissionPolicy: true
   resources:
     requests: { cpu: 20m, memory: 64Mi }
     limits: { cpu: 500m, memory: 256Mi }
-  # Caps what all extra stores together may use.
+  # ResourceQuota of each store namespace (one store: WordPress, MariaDB,
+  # woo-mcp and the setup Job).
   quota:
-    requests.cpu: "2"
-    requests.memory: 4Gi
-    limits.memory: 8Gi
-    persistentvolumeclaims: "12"
-    pods: "24"
+    requests.cpu: "1"
+    requests.memory: 1536Mi
+    limits.cpu: "4"
+    limits.memory: 3Gi
+    persistentvolumeclaims: "2"
+    requests.storage: 4Gi
+    pods: "6"
+    services: "4"
+  # LimitRange of each store namespace: defaults for containers that set
+  # nothing, and the most any one container may ask for.
+  limitRange:
+    defaultRequest: { cpu: 50m, memory: 64Mi }
+    default: { cpu: 500m, memory: 256Mi }
+    max: { cpu: "1", memory: 1Gi }
   # Sizes for each extra store (smaller than the built-in one).
   storeResources:
     mariadb:

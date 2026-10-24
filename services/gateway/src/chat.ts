@@ -69,19 +69,38 @@ function systemPrompt(user: User): string {
   ].join('\n');
 }
 
+// Free tiers limit tokens per minute; a short wait usually clears a 429.
+const RATE_LIMIT_RETRIES = 3;
+const MAX_RETRY_WAIT_MS = 20_000;
+
+/** Seconds to wait from Retry-After, or from "try again in 2.6s" in the body. */
+function retryDelayMs(res: Response, body: string): number {
+  const header = Number(res.headers.get('retry-after'));
+  const fromBody = Number(/try again in ([\d.]+)s/i.exec(body)?.[1]);
+  const seconds = Number.isFinite(header) && header > 0 ? header : Number.isFinite(fromBody) && fromBody > 0 ? fromBody : 2;
+  return Math.min(Math.ceil(seconds * 1000) + 250, MAX_RETRY_WAIT_MS);
+}
+
 async function complete(messages: LlmMessage[], tools: ReturnType<typeof toLlmTool>[]): Promise<LlmMessage> {
-  const res = await fetch(`${config.llmBaseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(config.llmApiKey ? { Authorization: `Bearer ${config.llmApiKey}` } : {}),
-    },
-    body: JSON.stringify({ model: config.llmModel, messages, tools: tools.length ? tools : undefined, temperature: 0.2 }),
-    signal: AbortSignal.timeout(config.llmTimeoutMs),
-  }).catch((err) => {
-    throw new HttpError(502, `LLM request failed: ${err instanceof Error ? err.message : String(err)}`);
-  });
-  const body = await res.text();
+  let res: Response;
+  let body: string;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(`${config.llmBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(config.llmApiKey ? { Authorization: `Bearer ${config.llmApiKey}` } : {}),
+      },
+      body: JSON.stringify({ model: config.llmModel, messages, tools: tools.length ? tools : undefined, temperature: 0.2 }),
+      signal: AbortSignal.timeout(config.llmTimeoutMs),
+    }).catch((err) => {
+      throw new HttpError(502, `LLM request failed: ${err instanceof Error ? err.message : String(err)}`);
+    });
+    body = await res.text();
+    if (res.status !== 429 || attempt >= RATE_LIMIT_RETRIES) break;
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs(res, body)));
+  }
+  if (res.status === 429) throw new HttpError(429, 'The LLM provider is rate limiting this key; try again in a minute.');
   if (!res.ok) throw new HttpError(502, `LLM returned ${res.status}: ${body.slice(0, 300)}`);
   const message = (JSON.parse(body) as { choices?: { message?: LlmMessage }[] }).choices?.[0]?.message;
   if (!message) throw new HttpError(502, 'LLM returned no message');

@@ -20,6 +20,11 @@ site:
   city: Bengaluru
   postcode: "560001"
 
+# Storefront look: a must-use plugin (files/urumi-skin.php) with a mono,
+# light/dark theme on top of Twenty Twenty-Five. Off = the stock theme.
+skin:
+  enabled: true
+
 woocommerce:
   # Only used if the image has no WooCommerce baked in. Empty = latest.
   version: ""

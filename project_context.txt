@@ -81,11 +81,14 @@ Dashboard        : React + Vite, served as static files by nginx.
 Chat agent       : lives in the backend. Uses an OpenAI-compatible chat API so
                    the provider is just config (base URL + key + model). A free
                    tier (Gemini or Groq) or a local model (Ollama) all work.
-                   Locally it is OFF until an API key is added (the local
-                   Ollama model was too slow and was removed to free RAM).
+                   Locally: Groq, model openai/gpt-oss-120b, key in the
+                   untracked local.secret.yaml (llama-3.3-70b was retired
+                   by Groq). Free tier is 8,000 tokens/min; the gateway
+                   waits and retries on 429.
 Store provisioner: small Node service with helm + kubectl. The only component
-                   with Kubernetes write access, limited by a Role to the
-                   separate stores namespace (urumi-stores).
+                   with Kubernetes write access; one namespace per store
+                   (urumi-store-<name>), and a ValidatingAdmissionPolicy
+                   limits its writes to those namespaces.
 Other upstreams  : (a) utils MCP server we wrote, in the cluster, bearer token
                        (get_time, convert_currency). Used for the "kill a pod"
                        demo.
@@ -139,15 +142,22 @@ Multi-store
    - One MCP server per store (not one server with a "store" field), so every
      per-server control (status, disable, read-only, metrics, audit) works per
      store, and adding/removing a store never touches the others.
-   - Stores are created from the admin dashboard. The gateway does NOT get
-     Kubernetes access; it asks the provisioner, which runs
-     "helm install store-<name>" with the same platform chart (store + woo-mcp
-     only) into the urumi-stores namespace. When the release is ready, the
-     gateway registers http://store-<name>-woo-mcp.urumi-stores:3000/mcp with
-     a token it generated (stored encrypted).
-   - A ResourceQuota caps all extra stores together; maxStores (default 3)
-     caps the count. Deleting a store removes its release, data volumes and
-     its tools.
+   - Any user creates stores from the dashboard (max 2 per user, 3 total).
+     The gateway does NOT get Kubernetes access; it asks the provisioner,
+     which creates namespace urumi-store-<name> with its own ResourceQuota,
+     LimitRange and a RoleBinding, then runs "helm upgrade --install
+     store-<name>" with the same platform chart (store + woo-mcp only) into
+     it. Up to 2 installs run in parallel; 10 min provisioning timeout. When
+     the release is ready, the gateway registers
+     http://store-<name>-woo-mcp.urumi-store-<name>:3000/mcp with a token it
+     generated (stored encrypted).
+   - States: Provisioning / Ready / Failed / Deleting. State lives on the
+     namespace (labels + annotations), so a provisioner restart mid-install
+     shows Failed "interrupted", and Retry is safe (idempotent).
+   - Deleting a store deletes its namespace: release, volumes, Secrets,
+     Ingress and its tools.
+   - Isolation: NetworkPolicies stop one store's pods from reaching another
+     store's DB or WordPress (tested).
 
 Secrets
    Nothing hardcoded in source. DB passwords, WooCommerce API keys, the
@@ -242,18 +252,22 @@ Team and control
 - Demo video.
 
 
-11. CURRENT STATUS (2026-10-24)
+11. CURRENT STATUS (2026-10-25)
 -------------------------------
 Built and verified on local k3d:
-- Phases 0-8 done. Fresh "helm install" brings everything up; the automated
-  checklist (node scripts/dod-check.mjs) passed 12/12 with users A and B.
-- Phase 10: role permissions, SSRF guard, rate limits + metrics, and
-  multi-store (dashboard "Stores" page -> provisioner -> auto-registered MCP
-  server; a new store is ready in ~1.5 min) are done.
+- Phases 0-8 done. node scripts/dod-check.mjs passes 12/12 with users A and
+  B, including the chat agent on Groq.
+- Phase 10: role permissions, SSRF guard, rate limits + metrics, multi-store
+  with one namespace per store (quota, LimitRange, per-user cap, parallel
+  installs, retry, restart recovery, admission policy on the provisioner,
+  cross-store NetworkPolicies) are done and tested.
+- New UI: mono, light/dark dashboard and a matching storefront skin.
 - Code is on GitHub: https://github.com/Relacosm/mcp-gateway
 
-Still to do (by the user):
-- Add an LLM API key (e.g. Groq) so the chat agent works; it is off locally.
-- Click through the dashboard once in a browser.
-- VPS deploy (prod values ready), demo video, submit.
+Always upgrade with both files, or the chat turns off:
+  helm upgrade platform charts/platform -n urumi     -f charts/platform/values-local.yaml -f local.secret.yaml --timeout 15m --wait
 
+Still to do (by the user):
+- Record the demo video, submit the form (deadline 26 Oct 2026, 11:59 PM IST).
+- VPS deploy is optional (prod values ready).
+- After submitting, rotate the Groq key (it was pasted in a chat).

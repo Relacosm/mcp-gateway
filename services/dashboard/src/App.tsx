@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api, type Me } from './api';
+import { api, type Me, type Server } from './api';
+import { ThemeToggle } from './theme';
 import { Login } from './pages/Login';
 import { Servers } from './pages/Servers';
 import { Members } from './pages/Members';
@@ -13,7 +14,7 @@ type Page = 'chat' | 'servers' | 'stores' | 'keys' | 'audit' | 'members';
 const PAGES: { id: Page; label: string; adminOnly?: boolean }[] = [
   { id: 'chat', label: 'Chat' },
   { id: 'servers', label: 'Servers' },
-  { id: 'stores', label: 'Stores', adminOnly: true },
+  { id: 'stores', label: 'Stores' },
   { id: 'keys', label: 'API keys' },
   { id: 'audit', label: 'Audit log' },
   { id: 'members', label: 'Members', adminOnly: true },
@@ -37,7 +38,7 @@ export function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  if (me === undefined) return <div className="center muted">Loading…</div>;
+  if (me === undefined) return <div className="center muted">Loading_</div>;
   if (me === null) return <Login onLogin={setMe} />;
 
   const isAdmin = me.role === 'admin';
@@ -50,31 +51,82 @@ export function App() {
     setMe(null);
   }
 
+  const index = visible.findIndex((p) => p.id === active);
+
   return (
     <div className="shell">
       <nav className="sidebar">
         <div className="brand">MCP Gateway</div>
-        {visible.map((p) => (
+        {visible.map((p, i) => (
           <a key={p.id} href={`#${p.id}`} className={p.id === active ? 'active' : ''}>
-            {p.label}
+            <span>
+              <span className="nav-no">{String(i + 1).padStart(2, '0')}</span>
+              {p.label}
+            </span>
           </a>
         ))}
         <div className="whoami">
+          <ThemeToggle />
           <div>{me.email}</div>
-          <span className={`badge ${isAdmin ? 'admin' : ''}`}>{me.role}</span>
-          <button className="link" onClick={logout}>
-            Log out
-          </button>
+          <div className="row">
+            <span className={`badge ${isAdmin ? 'admin' : ''}`}>{me.role}</span>
+            <button className="link" onClick={logout}>
+              Log out
+            </button>
+          </div>
         </div>
       </nav>
-      <main>
-        {active === 'chat' && <Chat me={me} />}
-        {active === 'servers' && <Servers isAdmin={isAdmin} />}
-        {active === 'stores' && isAdmin && <Stores />}
-        {active === 'keys' && <Keys me={me} />}
-        {active === 'audit' && <Audit isAdmin={isAdmin} />}
-        {active === 'members' && isAdmin && <Members me={me} />}
-      </main>
+      <div className="content">
+        <TopBar crumb={visible[index]?.label ?? ''} index={index + 1} total={visible.length} />
+        <main>
+          {active === 'chat' && <Chat me={me} />}
+          {active === 'servers' && <Servers isAdmin={isAdmin} />}
+          {active === 'stores' && <Stores />}
+          {active === 'keys' && <Keys me={me} />}
+          {active === 'audit' && <Audit isAdmin={isAdmin} />}
+          {active === 'members' && isAdmin && <Members me={me} />}
+        </main>
+      </div>
     </div>
+  );
+}
+
+/** A thin readout: where you are, how many upstreams are up, and the time. */
+function TopBar({ crumb, index, total }: { crumb: string; index: number; total: number }) {
+  const [servers, setServers] = useState<Server[] | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const load = () => api<Server[]>('/servers').then(setServers).catch(() => setServers(null));
+    load();
+    const poll = setInterval(load, 10_000);
+    const tick = setInterval(() => setNow(new Date()), 1000);
+    return () => {
+      clearInterval(poll);
+      clearInterval(tick);
+    };
+  }, []);
+
+  const enabled = servers?.filter((s) => s.status !== 'disabled') ?? [];
+  const up = enabled.filter((s) => s.status === 'connected').length;
+  const tools = enabled.reduce((n, s) => n + (s.status === 'connected' ? s.tools.length : 0), 0);
+  const health = !servers ? 'pending' : up === enabled.length ? 'connected' : 'unreachable';
+
+  return (
+    <header className="topbar">
+      <span>
+        <span className="muted">
+          {String(index).padStart(2, '0')}/{String(total).padStart(2, '0')}
+        </span>{' '}
+        {crumb}
+      </span>
+      <span className="topbar-stats">
+        <span className={`status ${health}`}>
+          {servers ? `${up}/${enabled.length} upstreams` : 'connecting'}
+        </span>
+        <span className="muted">{tools} tools</span>
+        <span className="muted tabular">{now.toLocaleTimeString([], { hour12: false })}</span>
+      </span>
+    </header>
   );
 }

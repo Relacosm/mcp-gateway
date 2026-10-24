@@ -9,6 +9,7 @@ type State = 'creating' | 'ready' | 'failed' | 'deleting';
 
 interface ProvisionedStore {
   name: string;
+  namespace: string;
   state: State;
   message: string;
   url: string;
@@ -27,9 +28,11 @@ interface StoreRow {
 const NAME = /^[a-z][a-z0-9]{1,14}$/;
 
 /**
- * Extra stores: one Helm release and one MCP server per store. The provisioner
- * creates the Kubernetes side; once a store is ready, this registers its MCP
- * server like any other upstream, so status, policy and audit apply per store.
+ * Extra stores: one namespace, one Helm release and one MCP server per store.
+ * The provisioner creates the Kubernetes side; once a store is ready, this
+ * registers its MCP server like any other upstream, so status, policy and
+ * audit apply per store. Any user may own up to maxStoresPerUser stores;
+ * owners and admins may retry or delete them.
  */
 export class StoreService {
   private timer?: NodeJS.Timeout;
@@ -49,7 +52,7 @@ export class StoreService {
     this.timer.unref();
   }
 
-  async list() {
+  async list(user: User) {
     this.require();
     const [provisioned, rows, users] = await Promise.all([
       this.call<ProvisionedStore[]>('GET', '/stores'),
@@ -57,23 +60,46 @@ export class StoreService {
       query<{ id: number; email: string }>('SELECT id, email FROM users'),
     ]);
     const servers = new Map(this.upstreams.describe().map((s) => [s.id, s]));
-    const byName = new Map(rows.map((r) => [r.name, r]));
-    return provisioned.map((p) => {
-      const row = byName.get(p.name);
+    const byName = new Map(provisioned.map((p) => [p.name, p]));
+    // A store we recorded but the cluster has no trace of (the provisioner
+    // restarted before creating anything) shows as failed, so it can be retried.
+    for (const row of rows) {
+      if (!byName.has(row.name)) {
+        byName.set(row.name, { name: row.name, namespace: '', state: 'failed', message: 'not found in the cluster; retry or delete', url: '', admin_url: '', mcp_url: '' });
+      }
+    }
+    const rowsByName = new Map(rows.map((r) => [r.name, r]));
+    const stores = [...byName.values()].sort((x, y) => x.name.localeCompare(y.name)).map((p) => {
+      const row = rowsByName.get(p.name);
       const server = row?.server_id ? servers.get(row.server_id) : undefined;
       return {
         ...p,
         created_at: row?.created_at ?? null,
         created_by: users.find((u) => u.id === row?.created_by)?.email ?? null,
+        can_manage: Boolean(row) && (user.role === 'admin' || row?.created_by === user.id),
         server: server ? { id: server.id, slug: server.slug, status: server.status, tools: server.tools.length } : null,
       };
     });
+    const mine = rows.filter((r) => r.created_by === user.id).length;
+    return { stores, limits: { per_user: config.maxStoresPerUser, mine } };
   }
 
+  /** Creates a store, or retries one of yours that failed. Safe to repeat. */
   async create(name: string, user: User): Promise<ProvisionedStore> {
     this.require();
     if (!NAME.test(name)) throw new HttpError(400, 'name: 2-15 lowercase letters or digits, starting with a letter');
+
+    const [existing] = await query<StoreRow>('SELECT * FROM stores WHERE name = $1', [name]);
+    if (existing) {
+      if (user.role !== 'admin' && existing.created_by !== user.id) throw new HttpError(409, `store '${name}' already exists`);
+      return this.call<ProvisionedStore>('POST', '/stores', { name, token: decrypt(existing.token_enc), admin_email: user.email });
+    }
+
     if (this.upstreams.bySlug(name)) throw new HttpError(409, `a server with slug '${name}' already exists`);
+    const [{ count }] = await query<{ count: number }>('SELECT count(*)::int AS count FROM stores WHERE created_by = $1', [user.id]);
+    if (count >= config.maxStoresPerUser) {
+      throw new HttpError(409, `you already have ${count} store(s); the limit is ${config.maxStoresPerUser} per user`);
+    }
 
     const token = newToken();
     const inserted = await query(
@@ -89,11 +115,19 @@ export class StoreService {
     }
   }
 
-  async remove(name: string): Promise<void> {
+  async remove(name: string, user: User): Promise<void> {
     this.require();
-    await this.call('DELETE', `/stores/${encodeURIComponent(name)}`);
-    // Its tools vanish now; the Kubernetes side is torn down in the background.
-    const [row] = await query<StoreRow>('DELETE FROM stores WHERE name = $1 RETURNING *', [name]);
+    const [row] = await query<StoreRow>('SELECT * FROM stores WHERE name = $1', [name]);
+    if (row && user.role !== 'admin' && row.created_by !== user.id) throw new HttpError(403, 'only the owner or an admin can delete this store');
+    if (!row && user.role !== 'admin') throw new HttpError(404, 'no such store');
+    try {
+      await this.call('DELETE', `/stores/${encodeURIComponent(name)}`);
+    } catch (err) {
+      // Nothing left in the cluster: just forget it.
+      if (!(err instanceof HttpError && err.status === 404 && row)) throw err;
+    }
+    // Its tools vanish now; the namespace is torn down in the background.
+    await query('DELETE FROM stores WHERE name = $1', [name]);
     if (row?.server_id) {
       await query('DELETE FROM servers WHERE id = $1', [row.server_id]);
       await this.upstreams.remove(row.server_id);

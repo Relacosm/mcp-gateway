@@ -266,22 +266,23 @@ export function apiRouter(gw: Gateway, stores: StoreService): Router {
     res.json(upstreams.describe().find((s) => s.id === id) ?? null);
   });
 
-  // ---- extra stores (admin): one Helm release + one MCP server each
-  api.get('/stores', requireAdmin, async (_req, res) => {
+  // ---- extra stores: one namespace + Helm release + MCP server each.
+  // Any user may own a few; owners and admins manage them.
+  api.get('/stores', requireUser, async (req, res) => {
     if (!stores.enabled) {
       res.json({ enabled: false, stores: [] });
       return;
     }
-    res.json({ enabled: true, stores: await stores.list() });
+    res.json({ enabled: true, ...(await stores.list(req.user!)) });
   });
 
-  api.post('/stores', requireAdmin, async (req, res) => {
+  api.post('/stores', requireUser, async (req, res) => {
     const { name } = z.object({ name: z.string() }).parse(req.body);
     res.status(202).json(await stores.create(name.trim().toLowerCase(), req.user!));
   });
 
-  api.delete('/stores/:name', requireAdmin, async (req, res) => {
-    await stores.remove(String(req.params.name));
+  api.delete('/stores/:name', requireUser, async (req, res) => {
+    await stores.remove(String(req.params.name), req.user!);
     res.json({ ok: true });
   });
 

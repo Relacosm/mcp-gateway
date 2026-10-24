@@ -1,3 +1,17 @@
+{{- if .Values.skin.enabled }}
+# Storefront look (mono, light/dark), loaded as a must-use plugin.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "store.wp" . }}-skin
+  labels:
+    {{- include "store.labels" . | nindent 4 }}
+    app.kubernetes.io/name: store-wordpress
+data:
+  urumi-skin.php: |
+    {{- .Files.Get "files/urumi-skin.php" | nindent 4 }}
+---
+{{- end }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -50,6 +64,11 @@ spec:
       labels:
         {{- include "store.labels" . | nindent 8 }}
         app.kubernetes.io/name: store-wordpress
+      {{- if .Values.skin.enabled }}
+      annotations:
+        # Restart when the skin changes (subPath mounts do not update in place).
+        checksum/skin: {{ .Files.Get "files/urumi-skin.php" | sha256sum }}
+      {{- end }}
     spec:
       # Apache runs as www-data (uid 33) from the start instead of starting as
       # root; the sysctl lets a non-root process bind port 80 (namespaced, safe).
@@ -77,6 +96,12 @@ spec:
           volumeMounts:
             - name: content
               mountPath: /var/www/html
+            {{- if .Values.skin.enabled }}
+            - name: skin
+              mountPath: /var/www/html/wp-content/mu-plugins/urumi-skin.php
+              subPath: urumi-skin.php
+              readOnly: true
+            {{- end }}
           # wp-login.php runs PHP and opens the DB, so a broken DB fails readiness.
           readinessProbe:
             httpGet:
@@ -97,6 +122,11 @@ spec:
         - name: content
           persistentVolumeClaim:
             claimName: {{ include "store.wp" . }}
+        {{- if .Values.skin.enabled }}
+        - name: skin
+          configMap:
+            name: {{ include "store.wp" . }}-skin
+        {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress

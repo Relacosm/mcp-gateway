@@ -103,6 +103,8 @@ spec:
             - name: PROVISIONER_TOKEN
               valueFrom:
                 secretKeyRef: { name: {{ $r }}-provisioner-token, key: token, optional: true }
+            - name: MAX_STORES_PER_USER
+              value: {{ .Values.maxStoresPerUser | default 2 | quote }}
             - name: LLM_API_KEY
               valueFrom:
                 secretKeyRef: { name: {{ $r }}-llm, key: api-key, optional: true }

@@ -78,23 +78,38 @@ The chat agent talks to any OpenAI-compatible API; the provider is config only
 
 - **Local default: off.** `values-local.yaml` leaves the provider empty, so the chat says it
   is not configured until you add one.
-- **Recommended:** a free hosted tier, for example Groq:
+- **Recommended:** a free hosted tier, for example Groq (tested with `openai/gpt-oss-120b`).
+  Put the provider and key in an untracked `local.secret.yaml` (`*.secret.yaml` is gitignored):
+
+```yaml
+# local.secret.yaml
+gateway:
+  llm:
+    baseUrl: https://api.groq.com/openai/v1
+    model: openai/gpt-oss-120b
+    timeoutMs: 60000
+secrets:
+  llmApiKey: <your Groq key>
+```
 
 ```bash
 helm upgrade platform charts/platform -n urumi -f charts/platform/values-local.yaml \
-  --set gateway.llm.baseUrl=https://api.groq.com/openai/v1 \
-  --set gateway.llm.model=llama-3.3-70b-versatile \
-  --set gateway.llm.timeoutMs=60000 \
-  --set secrets.llmApiKey=$GROQ_API_KEY --timeout 15m --wait
+  -f local.secret.yaml --timeout 15m --wait
 kubectl -n urumi rollout restart deploy/platform-gateway
 ```
+
+Pass `-f local.secret.yaml` on every later upgrade too, or the chat goes back to "not configured".
+Free tiers limit tokens per minute (Groq: 8,000/min for this model, about three chat steps);
+on a 429 the gateway waits as long as the provider asks (up to 20s, 3 retries) before giving up.
+List the models your key can use with
+`curl -H "Authorization: Bearer $KEY" https://api.groq.com/openai/v1/models`.
 
 ### Changing code
 
 ```bash
 scripts/build-images.sh gateway            # rebuild + import one image (fixed tag)
 kubectl -n urumi rollout restart deploy/platform-gateway
-helm upgrade platform charts/platform -n urumi -f charts/platform/values-local.yaml --timeout 15m --wait
+helm upgrade platform charts/platform -n urumi -f charts/platform/values-local.yaml -f local.secret.yaml --timeout 15m --wait
 helm -n urumi history platform              # list revisions
 helm -n urumi rollback platform <revision>  # roll back (tested: secrets and data survive)
 ```
@@ -152,20 +167,25 @@ in the audit log with `via = chat`.
 
 ### Add a store (multi-store)
 
-Dashboard → **Stores** (admin) → enter a name such as `bakery` → **Create store**. About 1.5
-minutes later the store is live at http://bakery.localtest.me and its MCP server is registered,
-so everyone sees `bakery__list_orders`, `bakery__create_product`, and so on. **Delete** removes
-the store, its data and its tools.
+Dashboard → **Stores** → enter a name such as `bakery` → **Create store**. About 2–3 minutes
+later the store is live at http://bakery.localtest.me and its MCP server is registered, so
+everyone sees `bakery__list_orders`, `bakery__create_product`, and so on. **Delete** removes
+the store's whole namespace (site, database, volumes, secrets) and its tools.
 
-How it works: the gateway asks the **provisioner**, which runs `helm install store-<name>` with
-the same chart (store + woo-mcp only) in the `urumi-stores` namespace. Only the provisioner has
-Kubernetes write access, and only in that namespace. A ResourceQuota and `provisioner.maxStores`
-(default 3) cap the total.
+How it works: the gateway asks the **provisioner**, which creates namespace `urumi-store-<name>`
+with its own ResourceQuota and LimitRange, then runs `helm install store-<name>` with the same
+chart (store + woo-mcp only) into it. Several stores can be provisioned at once (status
+Provisioning / Ready / Failed). Any user may own up to `gateway.maxStoresPerUser` (2) stores and
+`provisioner.maxStores` (3) caps the total; the owner or an admin can **Retry** a failed store or
+**Delete** it. If the provisioner restarts mid-install, the store shows Failed ("interrupted")
+and Retry is safe. Only the provisioner has Kubernetes write access, and a
+ValidatingAdmissionPolicy limits it to its own store namespaces. NetworkPolicies keep each
+store's database, WordPress and MCP server unreachable from other stores.
 
 wp-admin password of a store:
 
 ```bash
-kubectl -n urumi-stores get secret store-<name>-store-admin -o jsonpath='{.data.password}' | base64 -d
+kubectl -n urumi-store-<name> get secret store-<name>-store-admin -o jsonpath='{.data.password}' | base64 -d
 ```
 
 ### Run the whole checklist
@@ -226,9 +246,14 @@ helm upgrade --install platform charts/platform -n urumi --create-namespace \
 | Every workload non-root (incl. WordPress on port 80 via a namespaced sysctl, MariaDB as mysql) | store chart templates |
 | Upstream credentials encrypted at rest (AES-256-GCM) | `services/gateway/src/security.ts` |
 | Prompt-injection hardening in the chat agent | `services/gateway/src/chat.ts`, threat model |
+| Chat agent survives free-tier rate limits (waits and retries on 429 as the provider asks) | `services/gateway/src/chat.ts` (`complete`) |
+| Dashboard redesign: mono, square, light/dark with a sun/moon toggle, live top bar (upstreams up, tool count), clickable example prompts | `services/dashboard/src` |
+| Storefront skin matching the dashboard (light/dark), shipped as a must-use plugin from a ConfigMap; `store.skin.enabled` turns it off | `charts/platform/charts/store/files/urumi-skin.php` |
 | Production values with cert-manager TLS | `charts/platform/values-prod.yaml`, `templates/cluster-issuer.yaml` |
 | Automated Definition of Done check | `scripts/dod-check.mjs` |
-| Multi-store: add/delete stores from the dashboard; one MCP server per store, auto-registered | `services/provisioner`, `services/gateway/src/stores.ts`, Stores page, `templates/provisioner.yaml` |
+| Multi-store: create/retry/delete stores from the dashboard; one namespace + ResourceQuota + LimitRange + MCP server per store, auto-registered; parallel installs, per-user cap, provisioning timeout, restart recovery | `services/provisioner`, `services/gateway/src/stores.ts`, Stores page, `templates/provisioner.yaml` |
+| Provisioner fenced by a ValidatingAdmissionPolicy: it can only write in its own store namespaces | `templates/provisioner.yaml` |
+| Cross-store isolation: a store's DB, WordPress and MCP server are unreachable from other stores | `templates/networkpolicies.yaml` |
 | Pre-built store image (WooCommerce baked in, per-store settings still applied) | `services/store-wordpress` |
 
 Not done: a real VPS deploy (the prod values render and are ready, but no server was

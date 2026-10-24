@@ -1,12 +1,17 @@
 {{- if .Values.provisioner.enabled }}
 {{- /*
-The store provisioner. Extra stores live in their own namespace, and the
-provisioner's permissions are limited to that namespace, so neither it nor a
+The store provisioner. Every extra store gets its own namespace
+(<prefix><name>) with its own quota and limits. Creating namespaces needs
+cluster-wide rights, so the provisioner's writes are fenced in by an admission
+policy: it may only change namespaces labelled as its stores, and objects inside
+them. It holds no rights at all in the platform namespace, so neither it nor a
 store can touch the gateway, its database or its secrets.
 */ -}}
 {{- $r := .Release.Name -}}
 {{- $name := printf "%s-provisioner" $r -}}
-{{- $storesNs := .Values.provisioner.namespace | default (printf "%s-stores" .Release.Namespace) -}}
+{{- $prefix := .Values.provisioner.namespacePrefix | default (printf "%s-store-" .Release.Namespace) -}}
+{{- $ownerId := printf "%s.%s" .Release.Namespace $r -}}
+{{- $sa := printf "system:serviceaccount:%s:%s" .Release.Namespace $name -}}
 {{- $store := .Values.store -}}
 {{- $woo := index .Values "woo-mcp" -}}
 {{- /* Values every extra store is installed with; the provisioner adds the name and token. */ -}}
@@ -20,35 +25,55 @@ store can touch the gateway, its database or its secrets.
   "dashboard" (dict "enabled" false)
   "provisioner" (dict "enabled" false) -}}
 apiVersion: v1
-kind: Namespace
-metadata:
-  name: {{ $storesNs }}
-  labels:
-    {{- include "platform.labels" . | nindent 4 }}
----
-# Caps what all extra stores together may request.
-apiVersion: v1
-kind: ResourceQuota
-metadata:
-  name: stores-quota
-  namespace: {{ $storesNs }}
-  labels: {{- include "platform.labels" . | nindent 4 }}
-spec:
-  hard:
-    {{- toYaml .Values.provisioner.quota | nindent 4 }}
----
-apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $name }}
   labels: {{- include "platform.labels" . | nindent 4 }}
 ---
-# Everything a store release contains, in the stores namespace only.
+# What the provisioner may do cluster-wide: manage namespaces and set each one
+# up (quota, limits, a RoleBinding to the tenant role below). The admission
+# policy further down narrows every write to store namespaces.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: {{ $name }}
-  namespace: {{ $storesNs }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, watch, create, patch, delete]
+  - apiGroups: [""]
+    resources: [resourcequotas, limitranges]
+    verbs: [get, list, create, update, patch]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get, list, create, update, patch]
+  # May hand out the tenant role (and only that one) through a RoleBinding.
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [bind]
+    resourceNames: [{{ $name }}-tenant]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels: {{- include "platform.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+---
+# Everything a store release contains. Granted only inside each store
+# namespace, by a RoleBinding the provisioner creates there.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-tenant
   labels: {{- include "platform.labels" . | nindent 4 }}
 rules:
   - apiGroups: [""]
@@ -66,21 +91,45 @@ rules:
   - apiGroups: [networking.k8s.io]
     resources: [ingresses, networkpolicies]
     verbs: [get, list, watch, create, update, patch, delete]
+{{- if .Values.provisioner.admissionPolicy }}
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+# RBAC cannot say "only namespaces you created". This can: every write by the
+# provisioner must target a namespace labelled as one of its stores (both
+# before and after the change), or an object inside one.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
 metadata:
-  name: {{ $name }}
-  namespace: {{ $storesNs }}
+  name: {{ $name }}-stores-only
   labels: {{- include "platform.labels" . | nindent 4 }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: {{ $name }}
-subjects:
-  - kind: ServiceAccount
-    name: {{ $name }}
-    namespace: {{ .Release.Namespace }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["*"]
+        apiVersions: ["*"]
+        resources: ["*"]
+        operations: [CREATE, UPDATE, DELETE]
+  matchConditions:
+    - name: only-the-provisioner
+      expression: request.userInfo.username == {{ $sa | quote }}
+  validations:
+    - expression: >-
+        request.resource.resource == 'namespaces'
+        ? ((request.operation == 'CREATE' || (has(oldObject.metadata.labels) && oldObject.metadata.labels[?'urumi.io/stores-of'].orValue('') == {{ $ownerId | quote }}))
+           && (request.operation == 'DELETE' || (has(object.metadata.labels) && object.metadata.labels[?'urumi.io/stores-of'].orValue('') == {{ $ownerId | quote }})))
+        : (namespaceObject != null && has(namespaceObject.metadata.labels)
+           && namespaceObject.metadata.labels[?'urumi.io/stores-of'].orValue('') == {{ $ownerId | quote }})
+      message: the provisioner may only change its own store namespaces
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $name }}-stores-only
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  policyName: {{ $name }}-stores-only
+  validationActions: [Deny]
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -145,8 +194,24 @@ spec:
             - name: http
               containerPort: 3000
           env:
-            - name: STORES_NAMESPACE
-              value: {{ $storesNs }}
+            - name: NAMESPACE_PREFIX
+              value: {{ $prefix | quote }}
+            - name: OWNER_ID
+              value: {{ $ownerId | quote }}
+            - name: SERVICE_ACCOUNT
+              value: {{ $name }}
+            - name: SERVICE_ACCOUNT_NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: TENANT_CLUSTER_ROLE
+              value: {{ $name }}-tenant
+            - name: STORE_QUOTA
+              value: {{ toJson .Values.provisioner.quota | quote }}
+            - name: STORE_LIMIT_RANGE
+              value: {{ toJson .Values.provisioner.limitRange | quote }}
+            - name: PARALLEL_INSTALLS
+              value: {{ .Values.provisioner.parallelInstalls | quote }}
+            - name: INSTALL_TIMEOUT_SECONDS
+              value: {{ .Values.provisioner.installTimeoutSeconds | quote }}
             - name: DOMAIN
               value: {{ .Values.global.domain | quote }}
             - name: TLS

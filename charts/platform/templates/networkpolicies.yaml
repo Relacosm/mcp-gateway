@@ -1,9 +1,9 @@
 {{- if .Values.global.networkPolicies }}
 {{- /*
 Only the gateway may reach the MCP servers, its own Postgres and the store
-provisioner; only a store's own WordPress and setup Job may reach its MariaDB.
-Public entry points (storefront, dashboard, gateway) stay open to the Ingress
-controller.
+provisioner; only a store's own WordPress and setup Job may reach its MariaDB;
+only the Ingress controller and the store's own pods may reach its WordPress.
+The dashboard and gateway stay open to the Ingress controller.
 
 A store created by the provisioner is its own release in another namespace,
 so "the gateway" is identified by its release and namespace (global.gateway),
@@ -68,6 +68,31 @@ spec:
                 values: [store-wordpress, store-setup]
       ports:
         - port: 3306
+          protocol: TCP
+---
+# A storefront is reached by the ingress controller and by its own release
+# (its woo-mcp server and setup Job), never by another store's pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $r }}-store-wordpress-from-ingress
+  labels: {{- include "platform.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $r }}
+      app.kubernetes.io/name: store-wordpress
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.global.ingress.controllerNamespace }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ $r }}
+      ports:
+        - port: 80
           protocol: TCP
 {{- end }}
 {{- end }}

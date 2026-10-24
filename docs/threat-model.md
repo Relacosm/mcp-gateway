@@ -113,9 +113,14 @@ that power small:
 - **Separate component.** The gateway, which every member reaches, has no Kubernetes access. It
   can only ask the provisioner, over a ClusterIP service that a NetworkPolicy opens to the
   gateway alone, with a shared bearer token.
-- **Narrow permissions.** A namespaced Role covers only the store resource types, and only in
-  `urumi-stores`. `kubectl auth can-i list secrets -n urumi` for its service account is `no`.
-- **Admins only.** The store API checks the role on the server side.
+- **Narrow permissions.** Store resources (secrets, pods, ingresses, ...) come from a tenant
+  role bound only inside each store namespace. Cluster-wide it may only manage namespaces,
+  quotas, limit ranges and RoleBindings to that one tenant role, and a ValidatingAdmissionPolicy
+  rejects any of its writes outside namespaces labelled as its stores (tested: labelling or
+  deleting `urumi`, or creating an unlabelled namespace, is denied).
+  `kubectl auth can-i get secrets -n urumi` for its service account is `no`.
+- **Owners and admins.** Any user may create up to `maxStoresPerUser` stores; only the owner
+  or an admin may retry or delete one. Checked on the server side.
 - **No injection.** Names are validated twice (gateway and provisioner) against
   `^[a-z][a-z0-9]{1,14}# Threat model
 
@@ -226,10 +231,10 @@ compromised server (the public DeepWiki today, any server an admin adds tomorrow
 
  and passed as separate arguments. Per-store values, including the
   token, go in a temp file, never on a command line.
-- **Limits.** A ResourceQuota and `maxStores` stop anyone from exhausting the node by
-  creating stores.
+- **Limits.** A ResourceQuota and LimitRange per store namespace, `maxStores` in total and
+  `maxStoresPerUser` per user stop anyone from exhausting the node by creating stores.
 - **Stores are isolated from each other.** One store's pods cannot reach another store's
-  database or MCP server.
+  database, WordPress or MCP server (NetworkPolicies; tested from a store's woo-mcp pod).
 
 ## Other notes
 

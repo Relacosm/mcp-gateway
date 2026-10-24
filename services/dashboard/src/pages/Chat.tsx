@@ -17,6 +17,13 @@ interface Entry {
 
 const STORAGE_KEY = 'chat-history';
 
+const SUGGESTIONS = [
+  'Create a product called Desk Lamp for 499',
+  'What orders came in today?',
+  "List today's orders and convert the total to USD",
+  "Compare today's orders across all stores",
+];
+
 function loadHistory(): Entry[] {
   try {
     return JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '[]') as Entry[];
@@ -103,10 +110,19 @@ export function Chat({ me }: { me: Me }) {
       </header>
       <div className="messages">
         {entries.length === 0 && (
-          <p className="muted">
-            Try: "Create a product called Desk Lamp for 499", "What orders came in today?", or "List today's orders and convert the total to
-            USD".
-          </p>
+          <div className="empty">
+            <div className="empty-title">Ask anything a tool can answer</div>
+            <p className="muted small">Every call runs as you, through the gateway, and lands in the audit log.</p>
+            <div className="suggestions">
+              {SUGGESTIONS.map((q, i) => (
+                <button key={q} className="suggestion" onClick={() => setInput(q)}>
+                  <span className="nav-no">{String(i + 1).padStart(2, '0')}</span>
+                  {q}
+                  <span className="arrow">→</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {entries.map((m, i) => (
           <div key={i} className={`msg ${m.role} ${m.error ? 'err' : ''}`}>
@@ -120,10 +136,15 @@ export function Chat({ me }: { me: Me }) {
             <div className="bubble">{m.content}</div>
           </div>
         ))}
-        {busy && <div className="msg assistant muted">Thinking…</div>}
+        {busy && (
+          <div className="msg assistant">
+            <div className="thinking">Calling tools</div>
+          </div>
+        )}
         <div ref={bottom} />
       </div>
       <form className="composer" onSubmit={send}>
+        <span className="prompt">&gt;</span>
         <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask something that needs a tool…" disabled={busy} autoFocus />
         <button disabled={busy || !input.trim()}>Send</button>
       </form>

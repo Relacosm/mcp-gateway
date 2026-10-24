@@ -27,24 +27,43 @@ argument because then every per-server feature works per store for free (status,
 members-read-only, metrics, audit filter), and adding or deleting a store never restarts
 something the other stores depend on.
 
-1. An admin posts a name. The gateway checks it (2–15 lowercase letters or digits, no
-   collision with an existing server slug), generates a bearer token for the new MCP server,
-   stores it encrypted, and calls the provisioner.
-2. The **provisioner** runs `helm install store-<name>` using the chart it carries in its own
-   image, with a values file the platform release renders (images, sizes, domain, where the
+1. Any user posts a name. The gateway checks it (2–15 lowercase letters or digits, no
+   collision with an existing server slug, at most `gateway.maxStoresPerUser` stores per user),
+   generates a bearer token for the new MCP server, stores it encrypted, and calls the provisioner.
+2. The **provisioner** creates namespace `urumi-store-<name>` (labelled as one of its stores,
+   annotated with owner and creation time), a ResourceQuota and LimitRange in it, and a
+   RoleBinding that grants itself the store tenant role there. Then it runs
+   `helm upgrade --install store-<name>` into that namespace, using the chart it carries in its
+   own image, with a values file the platform release renders (images, sizes, domain, where the
    gateway lives) plus the name and token. Only store + woo-mcp are enabled in that release.
-   Helm operations are queued one at a time.
+   Up to `provisioner.parallelInstalls` (2) installs run at once; Helm's `--timeout`
+   (`installTimeoutSeconds`, 600) is the provisioning deadline.
 3. Setup is the same idempotent WP-CLI Job as the built-in store. The image already contains
    WooCommerce, so a store is ready in about 1.5 minutes.
 4. The gateway's reconcile loop (every 10s) sees the release is `deployed`, adds
-   `store-<name>-woo-mcp.urumi-stores` to the SSRF allowlist, and registers the server.
-5. Delete: the gateway unregisters the server (its tools vanish at once), and the provisioner
-   removes any leftover hook Job, uninstalls the release and deletes the database volume.
+   `store-<name>-woo-mcp.urumi-store-<name>` to the SSRF allowlist, and registers the server.
+5. Delete (owner or admin): the gateway unregisters the server (its tools vanish at once), and
+   the provisioner deletes the namespace, which takes the release, PVCs, Secrets and Ingress with it.
 
-Isolation: stores live in the `urumi-stores` namespace. The provisioner's Role only covers
-that namespace, so it cannot read the gateway's secrets. NetworkPolicies let only the platform
-gateway reach each store's MCP server, and only a store's own WordPress reach its MariaDB.
-A ResourceQuota caps the namespace.
+States shown in the dashboard: Provisioning / Ready / Failed / Deleting. The namespace is the
+record, so state survives a provisioner restart: a failure reason is kept as a namespace
+annotation, and a release left `pending-install` by a restart (Helm runs as the provisioner's
+child, so it died too) shows as Failed with "interrupted ... retry or delete". **Retry** (posting
+the same name again) is idempotent: a store on its way is left alone, a failed one is cleaned
+up inside its namespace and installed again with the same token.
+
+Isolation: each store has its own namespace, quota and limits. NetworkPolicies let only the
+platform gateway reach a store's MCP server, only a store's own WordPress and setup Job reach
+its MariaDB, and only the ingress controller and the store's own pods reach its WordPress, so
+one store's MCP server cannot reach another store's database or site.
+
+Why the provisioner needs cluster-wide rights, and how they are fenced in: creating namespaces
+is cluster-scoped, so its ClusterRole may create/delete namespaces, quotas, limit ranges and
+RoleBindings, and may `bind` exactly one ClusterRole (the store tenant role). RBAC cannot say
+"only namespaces you created", so a ValidatingAdmissionPolicy does: every write by the
+provisioner's service account must target a namespace labelled as its store (before and after
+the change) or an object inside one. It cannot label, delete or write into `urumi`, and it still
+has no read access to the gateway's secrets.
 
 ## How a tool call travels
 
@@ -108,7 +127,10 @@ readable after a user or server is deleted.
   OpenAI-compatible `/chat/completions` endpoint and runs every requested tool through the
   gateway. It feeds results back until the model answers or a step cap (6) is reached.
 - **Provider is config only** (base URL, model, key from a Secret), so Groq, Gemini, OpenAI
-  or a local Ollama all work.
+  or a local Ollama all work. Locally it runs on Groq (`openai/gpt-oss-120b`).
+- **Free-tier rate limits.** A 429 from the provider is retried up to 3 times after the wait
+  it asks for (Retry-After or "try again in Ns", capped at 20s); after that the chat returns a
+  clear "rate limited, try again in a minute" instead of a raw provider error.
 - **Small-model accommodations:**
   - tool schemas are cleaned of keys some providers reject;
   - numeric arguments accept numeric strings;
