@@ -88,18 +88,25 @@ spec:
               containerPort: 80
           env:
             {{- include "store.wpDbEnv" . | nindent 12 }}
+            # The image's wp-config evaluates this on every request, so it also
+            # applies to stores whose wp-config.php already exists.
             - name: WORDPRESS_CONFIG_EXTRA
               value: |
                 define('WP_MEMORY_LIMIT', '256M');
+                {{- if .Values.skin.enabled }}
+                define('WPMU_PLUGIN_DIR', '/opt/urumi/mu-plugins');
+                {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
           volumeMounts:
             - name: content
               mountPath: /var/www/html
             {{- if .Values.skin.enabled }}
+            # Outside the content volume: a mount inside it would make the kubelet
+            # create wp-content as root on a fresh volume, and WordPress (uid 33)
+            # could then not copy its plugins in.
             - name: skin
-              mountPath: /var/www/html/wp-content/mu-plugins/urumi-skin.php
-              subPath: urumi-skin.php
+              mountPath: /opt/urumi/mu-plugins
               readOnly: true
             {{- end }}
           # wp-login.php runs PHP and opens the DB, so a broken DB fails readiness.

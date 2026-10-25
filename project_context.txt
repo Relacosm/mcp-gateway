@@ -252,22 +252,74 @@ Team and control
 - Demo video.
 
 
-11. CURRENT STATUS (2026-10-25)
+11. CURRENT STATUS (2026-10-26)
 -------------------------------
 Built and verified on local k3d:
-- Phases 0-8 done. node scripts/dod-check.mjs passes 12/12 with users A and
-  B, including the chat agent on Groq.
+- Phases 0-8 done. node scripts/dod-check.mjs passed 12/12 (do NOT re-run it
+  before recording: it recreates alice@/bob@example.com, test keys, products
+  and audit rows).
 - Phase 10: role permissions, SSRF guard, rate limits + metrics, multi-store
   with one namespace per store (quota, LimitRange, per-user cap, parallel
   installs, retry, restart recovery, admission policy on the provisioner,
   cross-store NetworkPolicies) are done and tested.
-- New UI: mono, light/dark dashboard and a matching storefront skin.
-- Code is on GitHub: https://github.com/Relacosm/mcp-gateway
+- 26 Oct polish: store types with starter products (Custom = empty, Clothing,
+  Bakery, Books) chosen in Add a store; WordPress demo content removed, shop is
+  the home page, store footer; Back buttons; quota "Your stores x / 2";
+  dashboard times in IST; chat replies render Markdown (incl. tables, no raw
+  HTML); chat agent knows every store and uses IST for "today"; the main
+  store's server is "Store: urumi" (tools urumi__*), not "WooCommerce"/woo.
+- Fixed: on a FRESH store volume WooCommerce was never copied in, because the
+  skin was mounted inside wp-content (kubelet created it as root). The skin now
+  mounts at /opt/urumi/mu-plugins and WPMU_PLUGIN_DIR points there.
+- Code: https://github.com/Relacosm/mcp-gateway (PRIVATE - make it public or add
+  the reviewers before submitting).
 
-Always upgrade with both files, or the chat turns off:
-  helm upgrade platform charts/platform -n urumi     -f charts/platform/values-local.yaml -f local.secret.yaml --timeout 15m --wait
+Local demo accounts (k3d, gateway.localtest.me):
+  admin  hraj51399@gmail.com (password in secret platform-gateway/admin-password)
+  member priya.sharma@gmail.com (user A, chat)   member rahul.verma@gmail.com (user B)
+  store customer: ananya / ananya.iyer@gmail.com on store.localtest.me
+  Stores: store (Clothing, server "urumi"), bakery, books.
+
+Always upgrade locally with both files, or the chat turns off:
+  helm upgrade platform charts/platform -n urumi -f charts/platform/values-local.yaml -f local.secret.yaml --timeout 15m --wait
+
+
+12. PRODUCTION (LIVE since 2026-10-26)
+-------------------------------------
+URLs (Let's Encrypt TLS):
+  https://store.urumi.relacosm.com        storefront (/wp-admin for the store admin)
+  https://gateway.urumi.relacosm.com      dashboard
+  https://gateway.urumi.relacosm.com/mcp  the MCP endpoint
+  New stores: https://<name>.urumi.relacosm.com (wildcard DNS)
+Server : Contabo Cloud VPS 4 (4 vCPU, 8 GB, 100 GB), EU, IP 169.58.32.177,
+         Ubuntu 24.04, k3s v1.36 (Traefik + local-path), cert-manager, Helm 3.
+         ~$7.79/month, renews monthly: CANCEL it in the Contabo panel when done.
+SSH    : ssh -i ~/.ssh/urumi_vps root@169.58.32.177  (KUBECONFIG=/etc/rancher/k3s/k3s.yaml)
+DNS    : Spaceship, relacosm.com: A  *.urumi -> 169.58.32.177 (TTL 5 min)
+Images : ghcr.io/relacosm/urumi-* (public packages), tag 0.1.0; provisioner 0.1.1.
+Secrets: prod.secret.yaml on this PC only (gitignored): Groq key + emails.
+         Everything else (DB passwords, master key, admin password) is generated
+         in the cluster on first install. Admin login = hraj51399@gmail.com,
+         password: kubectl -n urumi get secret platform-gateway -o jsonpath='{.data.admin-password}' | base64 -d
+State  : fresh install verified - all pods ready, store has the 6 clothing
+         products, upstreams urumi/utils/deepwiki connected, chat agent works,
+         /mcp and /api return 401 without a key. No members or extra stores yet
+         (create Priya/Rahul and bakery/books from the dashboard if needed).
+
+Deploy / upgrade (from this PC):
+  1. change code, then build + push with a NEW tag (pods use IfNotPresent):
+       docker build -t ghcr.io/relacosm/urumi-<svc>:<tag> services/<svc> && docker push ...
+       (provisioner: docker build -f services/provisioner/Dockerfile . - it bundles the chart)
+  2. set the tag in charts/platform/values-prod.yaml
+  3. scp -r charts + prod.secret.yaml to root@169.58.32.177:/root/, then on the server:
+       helm upgrade --install platform charts/platform -n urumi -f charts/platform/values-prod.yaml -f prod.secret.yaml --timeout 15m --wait
+       rm /root/prod.secret.yaml
+  Roll back: helm -n urumi rollback platform <revision>   (helm -n urumi history platform)
+
 
 Still to do (by the user):
-- Record the demo video, submit the form (deadline 26 Oct 2026, 11:59 PM IST).
-- VPS deploy is optional (prod values ready).
+- Record the demo video and submit the form (deadline 26 Oct 2026, 11:59 PM IST).
+- Make the GitHub repo public (or share it) before submitting.
+- Push the local commits to GitHub (not pushed yet).
+- Cancel the Contabo VPS after the interviews.
 - After submitting, rotate the Groq key (it was pasted in a chat).
