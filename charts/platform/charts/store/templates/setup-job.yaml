@@ -10,6 +10,9 @@ data:
     {{- .Files.Get "files/setup.sh" | nindent 4 }}
   apikey.php: |
     {{- .Files.Get "files/apikey.php" | nindent 4 }}
+  catalog.php: |
+    {{- .Files.Get "files/catalog.php" | nindent 4 }}
+  catalog.json: {{ required (printf "store.catalog: unknown catalog %q" .Values.catalog) (index .Values.catalogs .Values.catalog) | toJson | quote }}
 ---
 # Runs after every install/upgrade. Each step is idempotent.
 apiVersion: batch/v1

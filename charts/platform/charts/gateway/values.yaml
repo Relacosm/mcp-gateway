@@ -13,6 +13,9 @@ replicas: 1
 admin:
   email: admin@example.com
 
+# The chat agent's "today" (keep it the same as woo-mcp.storeTimezone).
+timezone: Asia/Kolkata
+
 # Chat agent: any OpenAI-compatible chat completions API; the key is in the
 # <release>-llm Secret (secrets.llmApiKey). Local default: Ollama on the host.
 llm:

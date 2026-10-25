@@ -264,6 +264,13 @@ main {
 .row > button + button {
   margin-left: 8px;
 }
+.head-meta {
+  align-items: center;
+  gap: 16px;
+}
+.head-meta > * + button {
+  margin-left: 0;
+}
 .center {
   min-height: 100vh;
   display: flex;
@@ -374,6 +381,32 @@ main {
   gap: 24px;
   align-items: center;
 }
+.check-result {
+  margin-top: 10px;
+}
+.check-result.ok {
+  color: var(--ok);
+}
+.check-result.bad {
+  color: var(--bad);
+}
+.topbar-where {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+button.back {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+button.back:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+button.back:disabled:hover {
+  background: transparent;
+  color: var(--text);
+}
 .tabular {
   font-variant-numeric: tabular-nums;
 }
@@ -414,6 +447,39 @@ input[type='checkbox'] {
 }
 .row input {
   flex: 1;
+}
+.row > input + select {
+  margin-left: -1px;
+}
+/* Own chevron, so the arrow sits clear of the right edge. */
+select {
+  appearance: none;
+  padding-right: 44px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text) 50%), linear-gradient(135deg, var(--text) 50%, transparent 50%);
+  background-position: calc(100% - 23px) 52%, calc(100% - 18px) 52%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+.form-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.quota {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.quota strong {
+  color: var(--text);
+  margin-left: 6px;
+}
+.quota.full strong {
+  color: var(--bad);
 }
 button {
   font: inherit;
@@ -643,9 +709,12 @@ tr.dim td {
   flex-direction: column;
   gap: 16px;
   padding-bottom: 16px;
+  /* Keeps your messages clear of the scrollbar. */
+  padding-right: 16px;
 }
 .msg {
   max-width: 80%;
+  min-width: 0;
 }
 .msg.user {
   align-self: flex-end;
@@ -655,6 +724,59 @@ tr.dim td {
   padding: 12px 16px;
   white-space: pre-wrap;
   line-height: 1.6;
+}
+/* Rendered Markdown in assistant replies. */
+.bubble .md {
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.md p,
+.md ul,
+.md ol,
+.md h4,
+.md pre {
+  margin: 0;
+}
+.md ul,
+.md ol {
+  padding-left: 22px;
+}
+.md li + li {
+  margin-top: 4px;
+}
+.md h4 {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.md strong {
+  font-weight: 700;
+}
+.md .table-wrap {
+  overflow-x: auto;
+}
+.md table {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.md th,
+.md td {
+  border: 1px solid var(--line);
+  padding: 6px 12px;
+  text-align: left;
+}
+.md td.num,
+.md th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.md pre {
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  overflow-x: auto;
+  white-space: pre;
 }
 .msg.user .bubble {
   background: var(--text);

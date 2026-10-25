@@ -21,6 +21,14 @@ const STATE_LABEL: Record<Store['state'], string> = {
   failed: 'Failed',
 };
 
+// Starter products for a new store (store.catalogs in the Helm chart).
+const CATALOGS = [
+  { value: 'custom', label: 'Custom (empty)' },
+  { value: 'apparel', label: 'Clothing' },
+  { value: 'bakery', label: 'Bakery' },
+  { value: 'books', label: 'Books' },
+];
+
 const STATE_CLASS: Record<Store['state'], string> = {
   creating: 'pending',
   deleting: 'pending',
@@ -33,8 +41,10 @@ export function Stores() {
   const [limits, setLimits] = useState<{ per_user: number; mine: number } | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [name, setName] = useState('');
+  const [catalog, setCatalog] = useState('custom');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const full = !!limits && limits.mine >= limits.per_user;
 
   const load = useCallback(() => {
     api<{ enabled: boolean; stores: Store[]; limits?: { per_user: number; mine: number } }>('/stores')
@@ -57,7 +67,7 @@ export function Stores() {
     setBusy(true);
     setError('');
     try {
-      await api('/stores', { method: 'POST', body: { name } });
+      await api('/stores', { method: 'POST', body: { name, catalog } });
       setName('');
       load();
     } catch (err) {
@@ -94,13 +104,20 @@ export function Stores() {
       </header>
       <p className="muted">
         Each store gets its own namespace, WordPress site, database and MCP server, with its own quota and limits. When it is
-        ready, its tools appear for everyone as <code>&lt;name&gt;__list_orders</code> and so on. The built-in store is the{' '}
-        <code>woo</code> server.
+        ready, its tools appear for everyone as <code>&lt;name&gt;__list_orders</code> and so on. The built-in store (store.localtest.me) is
+        the <code>urumi</code> server.
       </p>
       {!enabled && <div className="error">Store provisioning is not enabled in this install.</div>}
       {enabled && (
         <form className="card form" onSubmit={create}>
-          <h3>Add a store</h3>
+          <div className="form-head">
+            <h3>Add a store</h3>
+            {limits && (
+              <span className={`quota ${full ? 'full' : ''}`}>
+                Your stores <strong className="tabular">{limits.mine} / {limits.per_user}</strong>
+              </span>
+            )}
+          </div>
           <div className="row">
             <input
               placeholder='name, e.g. "bakery"'
@@ -110,11 +127,19 @@ export function Stores() {
               title="2-15 lowercase letters or digits, starting with a letter"
               required
             />
-            <button disabled={busy}>{busy ? 'Starting…' : 'Create store'}</button>
+            <select id="store-catalog" aria-label="Store type" value={catalog} onChange={(e) => setCatalog(e.target.value)}>
+              {CATALOGS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <button disabled={busy || full}>{busy ? 'Starting…' : 'Create store'}</button>
           </div>
           <p className="muted small">
-            Takes about 2–3 minutes. The name becomes its address and its tool prefix.
-            {limits && ` You own ${limits.mine} of at most ${limits.per_user}.`}
+            {full
+              ? `You have used all ${limits!.per_user} of your stores. Delete one to create another.`
+              : 'Takes about 2–3 minutes. The name becomes its address and its tool prefix; the type picks its starter products.'}
           </p>
         </form>
       )}

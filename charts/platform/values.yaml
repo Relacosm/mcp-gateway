@@ -40,6 +40,8 @@ secrets:
 
 store:
   enabled: true
+  # The built-in store sells clothing; extra stores pick their type in the dashboard.
+  catalog: apparel
 
 woo-mcp:
   enabled: true

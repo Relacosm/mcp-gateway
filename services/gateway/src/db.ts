@@ -74,6 +74,10 @@ CREATE TABLE IF NOT EXISTS stores (
   created_by INT REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Which starter products the store was created with (store.catalogs in the chart).
+ALTER TABLE stores ADD COLUMN IF NOT EXISTS catalog TEXT NOT NULL DEFAULT 'custom';
+ALTER TABLE stores ALTER COLUMN catalog SET DEFAULT 'custom';
+UPDATE stores SET catalog = 'custom' WHERE catalog = 'general';
 
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,

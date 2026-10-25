@@ -183,6 +183,15 @@ html[data-theme='dark'] .urumi-theme .moon { display: none; }
   html:not([data-theme='light']) .urumi-theme .sun { display: block; }
   html:not([data-theme='light']) .urumi-theme .moon { display: none; }
 }
+
+/* Back link at the top of every page except the home page. */
+.urumi-back {
+  display: inline-block; margin-top: 24px; padding: 6px 12px;
+  font-size: 12px; letter-spacing: .14em; text-transform: uppercase; text-decoration: none;
+  color: var(--u-text) !important; border: 1px solid var(--u-line); background: var(--u-bg);
+}
+.urumi-back:hover { background: var(--u-text); color: var(--u-invert) !important; }
+.urumi-back-row { max-width: var(--wp--style--global--wide-size, 1340px); margin: 0 auto; padding: 0 var(--wp--preset--spacing--50, 24px); }
 </style>
     <?php
 }, 100);
@@ -212,6 +221,28 @@ add_action('wp_footer', function () {
     paint();
   });
   paint();
+})();
+</script>
+    <?php
+    if (is_front_page()) return;
+    ?>
+<script>
+(function () {
+  // Back to the previous page on this store, or to the shop when there is none.
+  var main = document.querySelector('.wp-site-blocks > main, main');
+  if (!main) return;
+  var row = document.createElement('div');
+  row.className = 'urumi-back-row';
+  var a = document.createElement('a');
+  a.className = 'urumi-back';
+  a.href = <?php echo wp_json_encode(home_url('/')); ?>;
+  a.textContent = '← Back';
+  a.addEventListener('click', function (e) {
+    var sameSite = document.referrer && new URL(document.referrer).origin === location.origin;
+    if (sameSite && history.length > 1) { e.preventDefault(); history.back(); }
+  });
+  row.appendChild(a);
+  main.insertBefore(row, main.firstChild);
 })();
 </script>
     <?php

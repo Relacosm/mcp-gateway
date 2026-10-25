@@ -100,7 +100,7 @@ Other upstreams  : (a) utils MCP server we wrote, in the cluster, bearer token
 -----------------------
 Tool name collisions
    Every tool is exposed as  <server-slug>__<tool-name>
-   Example: woo__list_orders, utils__convert_currency
+   Example: urumi__list_orders, utils__convert_currency
    The slug is unique per server, so two servers can both have "search".
    The gateway splits on the first "__" to route the call.
 

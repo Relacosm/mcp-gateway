@@ -20,6 +20,42 @@ site:
   city: Bengaluru
   postcode: "560001"
 
+# Starter products, added once on first setup. `catalog` picks one of
+# `catalogs`; the dashboard sets it per store ("type" in Add a store).
+catalog: custom
+catalogs:
+  # Empty store: the owner adds their own products (wp-admin or the chat agent).
+  custom:
+    category: ""
+    products: []
+  apparel:
+    category: Apparel
+    products:
+      - { name: Urumi T-shirt, price: 499, description: "Soft cotton tee." }
+      - { name: Classic Hoodie, price: 1299, description: "Heavyweight fleece hoodie with a kangaroo pocket." }
+      - { name: Denim Jacket, price: 2499, description: "Mid-wash denim jacket, regular fit." }
+      - { name: Baseball Cap, price: 399, description: "Six-panel cotton cap with an adjustable strap." }
+      - { name: Canvas Tote Bag, price: 349, description: "Sturdy canvas tote for groceries or books." }
+      - { name: Crew Socks (3 pairs), price: 299, description: "Cotton-blend everyday socks, pack of three." }
+  bakery:
+    category: Bakery
+    products:
+      - { name: Sourdough Loaf, price: 220, description: "Slow-fermented country loaf with a crisp crust." }
+      - { name: Whole Wheat Bread, price: 80, description: "Soft sandwich loaf made with whole wheat flour." }
+      - { name: Butter Croissant, price: 90, description: "Flaky, all-butter croissant baked every morning." }
+      - { name: Chocolate Truffle Cake (500 g), price: 650, description: "Rich dark chocolate cake with ganache." }
+      - { name: Blueberry Muffin, price: 110, description: "Moist muffin packed with blueberries." }
+      - { name: Cinnamon Roll, price: 120, description: "Soft roll swirled with cinnamon sugar and icing." }
+  books:
+    category: Books
+    products:
+      - { name: The Pragmatic Programmer, price: 899, description: "David Thomas and Andrew Hunt. Paperback." }
+      - { name: Clean Code, price: 749, description: "Robert C. Martin. Paperback." }
+      - { name: Designing Data-Intensive Applications, price: 1499, description: "Martin Kleppmann. Paperback." }
+      - { name: Atomic Habits, price: 499, description: "James Clear. Paperback." }
+      - { name: Sapiens, price: 599, description: "Yuval Noah Harari. Paperback." }
+      - { name: The Alchemist, price: 299, description: "Paulo Coelho. Paperback." }
+
 # Storefront look: a must-use plugin (files/urumi-skin.php) with a mono,
 # light/dark theme on top of Twenty Twenty-Five. Off = the stock theme.
 skin:

@@ -6,7 +6,7 @@ import { query } from './db.js';
 import type { Gateway } from './router.js';
 import { encrypt, hashPassword, newApiKey, verifyPassword } from './security.js';
 import { assertPublicUrl, SsrfError } from './ssrf.js';
-import type { StoreService } from './stores.js';
+import { CATALOGS, type StoreService } from './stores.js';
 import type { ServerRow } from './upstreams.js';
 
 // Burns the same scrypt time for unknown emails, so login timing does not leak which emails exist.
@@ -277,8 +277,8 @@ export function apiRouter(gw: Gateway, stores: StoreService): Router {
   });
 
   api.post('/stores', requireUser, async (req, res) => {
-    const { name } = z.object({ name: z.string() }).parse(req.body);
-    res.status(202).json(await stores.create(name.trim().toLowerCase(), req.user!));
+    const { name, catalog } = z.object({ name: z.string(), catalog: z.enum(CATALOGS).optional() }).parse(req.body);
+    res.status(202).json(await stores.create(name.trim().toLowerCase(), req.user!, catalog));
   });
 
   api.delete('/stores/:name', requireUser, async (req, res) => {

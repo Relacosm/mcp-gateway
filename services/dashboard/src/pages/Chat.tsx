@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, type Me } from '../api';
+import { Markdown } from '../Markdown';
 
 interface Step {
   tool: string;
@@ -97,7 +98,7 @@ export function Chat({ me }: { me: Me }) {
     <div className="chat">
       <header className="page-head">
         <h2>Chat</h2>
-        <div className="row">
+        <div className="row head-meta">
           <span className="muted small">
             as {me.email} · {tools.length} tools available
           </span>
@@ -133,7 +134,13 @@ export function Chat({ me }: { me: Me }) {
                 ))}
               </div>
             )}
-            <div className="bubble">{m.content}</div>
+            {m.role === 'assistant' && !m.error ? (
+              <div className="bubble">
+                <Markdown text={m.content} />
+              </div>
+            ) : (
+              <div className="bubble">{m.content}</div>
+            )}
           </div>
         ))}
         {busy && (

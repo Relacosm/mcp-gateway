@@ -2,7 +2,7 @@
 {{- $host := printf "%s.%s" .Values.host .Values.global.domain -}}
 {{- $r := .Release.Name -}}
 {{- $seeds := list
-  (dict "name" "WooCommerce" "slug" "woo" "url" (printf "http://%s-woo-mcp:3000/mcp" $r) "tokenEnv" "SEED_TOKEN_WOO")
+  (dict "name" "Store: urumi" "slug" "urumi" "url" (printf "http://%s-woo-mcp:3000/mcp" $r) "tokenEnv" "SEED_TOKEN_WOO")
   (dict "name" "Utils" "slug" "utils" "url" (printf "http://%s-utils-mcp:3000/mcp" $r) "tokenEnv" "SEED_TOKEN_UTILS") -}}
 {{- $seeds = concat $seeds (.Values.extraSeedServers | default list) -}}
 {{- $internal := concat (list (printf "%s-woo-mcp" $r) (printf "%s-utils-mcp" $r)) (.Values.allowedInternalHosts | default list) -}}
@@ -70,6 +70,8 @@ spec:
                 secretKeyRef: { name: {{ .Release.Name }}-gateway, key: master-key }
             - name: ADMIN_EMAIL
               value: {{ .Values.admin.email | quote }}
+            - name: TIMEZONE
+              value: {{ .Values.timezone | quote }}
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef: { name: {{ .Release.Name }}-gateway, key: admin-password }

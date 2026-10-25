@@ -41,6 +41,8 @@ export const config = {
   // Upstream servers registered once on first start.
   seedServers: JSON.parse(process.env.SEED_SERVERS ?? '[]') as SeedServer[],
   // Chat agent: any OpenAI-compatible chat completions API.
+  // Timezone the agent uses for "today" (the stores' timezone).
+  timezone: process.env.TIMEZONE || 'UTC',
   llmBaseUrl: (process.env.LLM_BASE_URL ?? '').replace(/\/$/, ''),
   llmModel: process.env.LLM_MODEL ?? '',
   llmApiKey: process.env.LLM_API_KEY ?? '',

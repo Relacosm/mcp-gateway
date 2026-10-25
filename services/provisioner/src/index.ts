@@ -289,12 +289,19 @@ const createBody = z.object({
   token: z.string().min(32).max(256),
   title: z.string().min(1).max(80).optional(),
   admin_email: z.string().email().optional(),
+  // Starter products: a key of store.catalogs in the chart. Unset = the chart default.
+  catalog: z.string().regex(/^[a-z]{1,20}$/).optional(),
 });
 
 function storeValues(body: z.infer<typeof createBody>): Record<string, unknown> {
-  const { name, token, title, admin_email } = body;
+  const { name, token, title, admin_email, catalog } = body;
   return {
-    store: { host: name, site: { title: title ?? `${name[0].toUpperCase()}${name.slice(1)} Store` }, ...(admin_email ? { admin: { email: admin_email } } : {}) },
+    store: {
+      host: name,
+      site: { title: title ?? `${name[0].toUpperCase()}${name.slice(1)} Store` },
+      ...(admin_email ? { admin: { email: admin_email } } : {}),
+      ...(catalog ? { catalog } : {}),
+    },
     'woo-mcp': { storeHost: name },
     secrets: { wooMcpToken: token },
   };

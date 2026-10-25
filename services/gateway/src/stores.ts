@@ -23,9 +23,13 @@ interface StoreRow {
   server_id: number | null;
   created_by: number | null;
   created_at: string;
+  catalog: string;
 }
 
 const NAME = /^[a-z][a-z0-9]{1,14}$/;
+/** Store types offered in the dashboard; each is a key of store.catalogs in the chart. */
+export const CATALOGS = ['custom', 'apparel', 'bakery', 'books'] as const;
+export type Catalog = (typeof CATALOGS)[number];
 
 /**
  * Extra stores: one namespace, one Helm release and one MCP server per store.
@@ -85,14 +89,20 @@ export class StoreService {
   }
 
   /** Creates a store, or retries one of yours that failed. Safe to repeat. */
-  async create(name: string, user: User): Promise<ProvisionedStore> {
+  async create(name: string, user: User, catalog: Catalog = 'custom'): Promise<ProvisionedStore> {
     this.require();
     if (!NAME.test(name)) throw new HttpError(400, 'name: 2-15 lowercase letters or digits, starting with a letter');
 
     const [existing] = await query<StoreRow>('SELECT * FROM stores WHERE name = $1', [name]);
     if (existing) {
       if (user.role !== 'admin' && existing.created_by !== user.id) throw new HttpError(409, `store '${name}' already exists`);
-      return this.call<ProvisionedStore>('POST', '/stores', { name, token: decrypt(existing.token_enc), admin_email: user.email });
+      // A retry keeps the type the store was created with.
+      return this.call<ProvisionedStore>('POST', '/stores', {
+        name,
+        token: decrypt(existing.token_enc),
+        admin_email: user.email,
+        catalog: existing.catalog,
+      });
     }
 
     if (this.upstreams.bySlug(name)) throw new HttpError(409, `a server with slug '${name}' already exists`);
@@ -103,12 +113,12 @@ export class StoreService {
 
     const token = newToken();
     const inserted = await query(
-      `INSERT INTO stores (name, token_enc, created_by) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING RETURNING name`,
-      [name, encrypt(token), user.id],
+      `INSERT INTO stores (name, token_enc, created_by, catalog) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO NOTHING RETURNING name`,
+      [name, encrypt(token), user.id, catalog],
     );
     if (!inserted.length) throw new HttpError(409, `store '${name}' already exists`);
     try {
-      return await this.call<ProvisionedStore>('POST', '/stores', { name, token, admin_email: user.email });
+      return await this.call<ProvisionedStore>('POST', '/stores', { name, token, admin_email: user.email, catalog });
     } catch (err) {
       await query('DELETE FROM stores WHERE name = $1', [name]);
       throw err;

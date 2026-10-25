@@ -99,7 +99,7 @@ const orderId = await placeOrder();
 check('Customer checks out with COD', Number.isInteger(orderId), `order #${orderId}`);
 const adminKey = (await admin('POST', '/keys', { name: 'dod-check' })).key;
 const ac = await mcp(adminKey);
-const order = JSON.parse(text(await ac.callTool({ name: 'woo__get_order', arguments: { id: orderId } })));
+const order = JSON.parse(text(await ac.callTool({ name: 'urumi__get_order', arguments: { id: orderId } })));
 check('Order is in WooCommerce (admin view)', order.id === orderId && order.payment_method === 'Cash on delivery', order.status);
 await ac.close();
 
@@ -107,11 +107,11 @@ if (withChat) {
   console.log('\n-- Chat agent, as user A (alice)');
   const name = `DoD Lamp ${Date.now() % 100000}`;
   const created = await alice('POST', '/chat', { messages: [{ role: 'user', content: `Create a product called "${name}" with price 499` }] });
-  const madeIt = created.steps.some((s) => s.tool === 'woo__create_product' && !s.isError);
+  const madeIt = created.steps.some((s) => s.tool === 'urumi__create_product' && !s.isError);
   const onStore = await (await fetch(`${STORE}/?rest_route=/wc/store/v1/products&search=${encodeURIComponent(name)}`)).json();
   check('Chat creates a product that appears on the storefront', madeIt && onStore.length > 0, created.steps.map((s) => s.tool).join(', '));
   const today = await alice('POST', '/chat', { messages: [{ role: 'user', content: 'What orders came in today?' }] });
-  const listed = today.steps.some((s) => s.tool === 'woo__list_orders' && s.result.includes(`"id": ${orderId}`));
+  const listed = today.steps.some((s) => s.tool === 'urumi__list_orders' && s.result.includes(`"id": ${orderId}`));
   check('Chat answers "what orders came in today" with the order', listed, today.reply.slice(0, 80));
 }
 
@@ -123,7 +123,7 @@ const enabled = servers.filter((s) => s.enabled && s.status === 'connected').map
 const tools = (await bc.listTools()).tools.map((t) => t.name);
 check('Connects with only the gateway URL and a key', tools.length > 0, `${tools.length} tools`);
 check('Sees the tools of every enabled server', enabled.every((slug) => tools.some((t) => t.startsWith(`${slug}__`))), enabled.join(', '));
-const todays = JSON.parse(text(await bc.callTool({ name: 'woo__list_orders', arguments: { date: 'today' } })));
+const todays = JSON.parse(text(await bc.callTool({ name: 'urumi__list_orders', arguments: { date: 'today' } })));
 check('Orders question returns today\'s order', todays.some((o) => o.id === orderId), `${todays.length} today`);
 const total = todays.reduce((sum, o) => sum + Number(o.total), 0);
 const usd = JSON.parse(text(await bc.callTool({ name: 'utils__convert_currency', arguments: { amount: total, from: 'INR', to: 'USD' } })));
@@ -139,7 +139,7 @@ try {
 }
 check("Revoked key is rejected on the next call", rejected);
 
-const deepwiki = servers.find((s) => s.slug === 'deepwiki') ?? servers.find((s) => s.slug !== 'woo' && s.slug !== 'utils');
+const deepwiki = servers.find((s) => s.slug === 'deepwiki') ?? servers.find((s) => s.slug !== 'urumi' && s.slug !== 'utils');
 if (deepwiki) {
   await admin('PATCH', `/servers/${deepwiki.id}`, { enabled: false });
   const chatTools = (await alice('GET', '/tools')).map((t) => t.name);
@@ -154,8 +154,8 @@ if (deepwiki) {
   kubectl('wait', '--for=delete', 'pod', '-l', 'app.kubernetes.io/name=utils-mcp', '--timeout=60s');
   await sleep(12_000);
   const status = (await admin('GET', '/servers')).find((s) => s.slug === 'utils')?.status;
-  const wooStill = await bc2.callTool({ name: 'woo__list_orders', arguments: { date: 'today' } });
-  check('Kill one upstream pod: others work, dashboard shows Unreachable', !wooStill.isError && status === 'unreachable', `utils=${status}`);
+  const urumiStill = await bc2.callTool({ name: 'urumi__list_orders', arguments: { date: 'today' } });
+  check('Kill one upstream pod: others work, dashboard shows Unreachable', !urumiStill.isError && status === 'unreachable', `utils=${status}`);
   kubectl('scale', `deploy/${REL}-utils-mcp`, '--replicas=1');
   await bc2.close();
   await bob('DELETE', `/keys/${bob2.id}`);

@@ -92,6 +92,11 @@ export interface AuditRow {
   error: string | null;
 }
 
+// Every time on the dashboard is IST, whatever the viewer's browser is set to.
+export const TIME_ZONE = 'Asia/Kolkata';
+
 export function when(value: string | null): string {
-  return value ? new Date(value).toLocaleString() : '—';
+  return value
+    ? `${new Date(value).toLocaleString('en-IN', { timeZone: TIME_ZONE, dateStyle: 'medium', timeStyle: 'medium' })} IST`
+    : '—';
 }

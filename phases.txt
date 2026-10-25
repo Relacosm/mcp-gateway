@@ -74,7 +74,7 @@ PHASE 3 - Gateway backend  <- the biggest phase   [DONE]
 3e. Seed
   - The WooCommerce MCP server is registered automatically on first start.
 Done when
-  - MCP Inspector, with only the gateway URL and an API key, lists woo__ tools
+  - MCP Inspector, with only the gateway URL and an API key, lists urumi__ tools
     and can call them.
   - A revoked key gets rejected.
   - Scaling the Woo MCP server to 0 gives a quick, clear error and the status

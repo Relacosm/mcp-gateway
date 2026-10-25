@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type Me, type Server } from './api';
+import { api, TIME_ZONE, type Me, type Server } from './api';
 import { ThemeToggle } from './theme';
 import { Login } from './pages/Login';
 import { Servers } from './pages/Servers';
@@ -28,12 +28,17 @@ function currentPage(): Page {
 export function App() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [page, setPage] = useState<Page>(currentPage);
+  // Back is offered once you have moved between pages in this tab.
+  const [moved, setMoved] = useState(false);
 
   useEffect(() => {
     api<Me>('/auth/me')
       .then(setMe)
       .catch(() => setMe(null));
-    const onHash = () => setPage(currentPage());
+    const onHash = () => {
+      setPage(currentPage());
+      setMoved(true);
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -77,7 +82,7 @@ export function App() {
         </div>
       </nav>
       <div className="content">
-        <TopBar crumb={visible[index]?.label ?? ''} index={index + 1} total={visible.length} />
+        <TopBar crumb={visible[index]?.label ?? ''} index={index + 1} total={visible.length} canGoBack={moved} />
         <main>
           {active === 'chat' && <Chat me={me} />}
           {active === 'servers' && <Servers isAdmin={isAdmin} />}
@@ -92,7 +97,7 @@ export function App() {
 }
 
 /** A thin readout: where you are, how many upstreams are up, and the time. */
-function TopBar({ crumb, index, total }: { crumb: string; index: number; total: number }) {
+function TopBar({ crumb, index, total, canGoBack }: { crumb: string; index: number; total: number; canGoBack: boolean }) {
   const [servers, setServers] = useState<Server[] | null>(null);
   const [now, setNow] = useState(() => new Date());
 
@@ -114,7 +119,10 @@ function TopBar({ crumb, index, total }: { crumb: string; index: number; total: 
 
   return (
     <header className="topbar">
-      <span>
+      <span className="topbar-where">
+        <button className="secondary back" onClick={() => history.back()} disabled={!canGoBack} title="Previous page">
+          ← Back
+        </button>
         <span className="muted">
           {String(index).padStart(2, '0')}/{String(total).padStart(2, '0')}
         </span>{' '}
@@ -125,7 +133,7 @@ function TopBar({ crumb, index, total }: { crumb: string; index: number; total: 
           {servers ? `${up}/${enabled.length} upstreams` : 'connecting'}
         </span>
         <span className="muted">{tools} tools</span>
-        <span className="muted tabular">{now.toLocaleTimeString([], { hour12: false })}</span>
+        <span className="muted tabular">{now.toLocaleTimeString('en-IN', { timeZone: TIME_ZONE, hour12: false })} IST</span>
       </span>
     </header>
   );

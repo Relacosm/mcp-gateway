@@ -66,7 +66,7 @@ function ServerForm({ server, onDone }: { server?: Server; onDone: () => void })
           <input value={form.name} onChange={set('name')} required />
         </label>
         <label>
-          Slug <small>(tool prefix, e.g. "woo")</small>
+          Slug <small>(tool prefix, e.g. "bakery")</small>
           <input value={form.slug} onChange={set('slug')} required disabled={Boolean(server)} pattern="[a-z0-9]+(-[a-z0-9]+)*" />
         </label>
       </div>
@@ -141,6 +141,33 @@ export function Servers({ isAdmin }: { isAdmin: boolean }) {
     return () => clearInterval(t);
   }, [load]);
 
+  // "Check now": button state while it runs, then the outcome for a few seconds.
+  const [checking, setChecking] = useState<Record<number, boolean>>({});
+  const [checked, setChecked] = useState<Record<number, { ok: boolean; text: string }>>({});
+
+  async function checkNow(s: Server) {
+    setChecking((c) => ({ ...c, [s.id]: true }));
+    setChecked((c) => {
+      const { [s.id]: _, ...rest } = c;
+      return rest;
+    });
+    let result: { ok: boolean; text: string };
+    try {
+      const r = await api<Server | null>(`/servers/${s.id}/refresh`, { method: 'POST' });
+      result = !r
+        ? { ok: false, text: 'server not found' }
+        : r.status === 'connected'
+          ? { ok: true, text: `connected · ${r.tools.length} tools` }
+          : { ok: false, text: r.error ? `${r.status}: ${r.error}` : r.status };
+    } catch (err) {
+      result = { ok: false, text: (err as Error).message };
+    }
+    setChecking((c) => ({ ...c, [s.id]: false }));
+    setChecked((c) => ({ ...c, [s.id]: result }));
+    load();
+    setTimeout(() => setChecked((c) => (c[s.id] === result ? (({ [s.id]: _, ...rest }) => rest)(c) : c)), 6000);
+  }
+
   async function act(fn: () => Promise<unknown>) {
     try {
       await fn();
@@ -207,8 +234,8 @@ export function Servers({ isAdmin }: { isAdmin: boolean }) {
                 <button className="secondary" onClick={() => act(() => api(`/servers/${s.id}`, { method: 'PATCH', body: { enabled: !s.enabled } }))}>
                   {s.enabled ? 'Disable' : 'Enable'}
                 </button>
-                <button className="secondary" onClick={() => act(() => api(`/servers/${s.id}/refresh`, { method: 'POST' }))}>
-                  Check now
+                <button className="secondary" onClick={() => checkNow(s)} disabled={checking[s.id]}>
+                  {checking[s.id] ? 'Checking…' : 'Check now'}
                 </button>
                 <button className="secondary" onClick={() => setEditing(s)}>
                   Edit
@@ -222,6 +249,11 @@ export function Servers({ isAdmin }: { isAdmin: boolean }) {
               </>
             )}
           </div>
+          {checked[s.id] && (
+            <div className={`check-result small ${checked[s.id].ok ? 'ok' : 'bad'}`} role="status">
+              {checked[s.id].ok ? '✓' : '✕'} Checked just now · {checked[s.id].text}
+            </div>
+          )}
           {open[s.id] && (
             <ul className="tools">
               {s.tools.map((t) => (

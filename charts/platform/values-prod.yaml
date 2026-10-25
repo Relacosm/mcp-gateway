@@ -5,8 +5,9 @@
 #   helm upgrade --install platform charts/platform -n urumi --create-namespace \
 #     -f charts/platform/values-prod.yaml -f prod.secret.yaml --timeout 15m --wait
 global:
-  # Replace with your domain. Point store.<domain> and gateway.<domain> (A records) at the VPS.
-  domain: example.com
+  # Hosts are store.<domain>, gateway.<domain> and <store>.<domain>, so point a
+  # wildcard A record (*.<domain>) at the VPS.
+  domain: urumi.relacosm.com
   ingress:
     className: traefik
     tls: true
@@ -65,7 +66,7 @@ gateway:
   # Any OpenAI-compatible provider. Groq shown; the key goes in secrets.llmApiKey.
   llm:
     baseUrl: https://api.groq.com/openai/v1
-    model: llama-3.3-70b-versatile
+    model: openai/gpt-oss-120b
     timeoutMs: 60000
     sequentialTools: false
   resources:
@@ -82,7 +83,8 @@ provisioner:
     repository: ghcr.io/relacosm/urumi-provisioner
     tag: "0.1.0"
   # Each store is <name>.<domain>: add a wildcard DNS record (*.<domain>).
-  maxStores: 5
+  # Sized for an 8 GB VPS; each extra store reserves roughly 1 GB.
+  maxStores: 3
 
 dashboard:
   image:

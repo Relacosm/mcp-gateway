@@ -146,7 +146,7 @@ npx @modelcontextprotocol/inspector
 #   Header: Authorization = Bearer <your key>
 ```
 
-Tools are named `<server>__<tool>`, e.g. `woo__list_orders`, `utils__convert_currency`.
+Tools are named `<server>__<tool>`, e.g. `urumi__list_orders`, `utils__convert_currency`.
 Try "List today's orders and convert the total to USD" (needs two servers).
 
 ### Chat agent

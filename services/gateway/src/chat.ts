@@ -57,10 +57,20 @@ function resultText(result: CallToolResult): string {
   return text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}\n…(truncated)` : text;
 }
 
-function systemPrompt(user: User): string {
+function systemPrompt(user: User, toolNames: string[]): string {
+  // Every store is its own server, so the model needs the list to cover them all.
+  const stores = toolNames.filter((n) => n.endsWith('__list_orders')).map((n) => n.slice(0, -'__list_orders'.length));
+  const now = new Date();
+  const local = new Intl.DateTimeFormat('en-CA', { timeZone: config.timezone, dateStyle: 'short', timeStyle: 'short', hourCycle: 'h23' }).format(now);
   return [
     `You are the team assistant inside the MCP gateway dashboard, acting for ${user.email} (role: ${user.role}).`,
-    `Current time: ${new Date().toISOString()}.`,
+    `Current time: ${local} (${config.timezone}), ${now.toISOString()} UTC. "Today" means today's date in ${config.timezone}.`,
+    ...(stores.length
+      ? [
+          `Stores (each is its own server): ${stores.join(', ')}.`,
+          'When a question about orders or products names no store, check every store and say which ones you checked.',
+        ]
+      : []),
     'Use the available tools to answer; call several in sequence when a question needs data from more than one server.',
     'If a tool needs a value that another tool returns, call the first tool, wait for its result, then call the second with the real value.',
     'Tool names look like <server>__<tool>. Pass only arguments the tool schema defines.',
@@ -141,10 +151,10 @@ export async function runChat(gw: Gateway, user: User, history: ChatTurn[]): Pro
   if (!config.llmBaseUrl || !config.llmModel) throw new HttpError(503, 'the chat agent is not configured (LLM_BASE_URL / LLM_MODEL)');
 
   const tools = gw.upstreams.listTools(user.role).map(toLlmTool);
-  const messages: LlmMessage[] = [{ role: 'system', content: systemPrompt(user) }, ...history];
+  const names = new Set(tools.map((t) => t.function.name));
+  const messages: LlmMessage[] = [{ role: 'system', content: systemPrompt(user, [...names]) }, ...history];
   const steps: ChatStep[] = [];
   const caller = { user, rateKey: `chat:${user.id}`, source: 'chat' as const };
-  const names = new Set(tools.map((t) => t.function.name));
 
   for (let step = 0; step < config.chatMaxSteps; step++) {
     const message = await complete(messages, tools);
