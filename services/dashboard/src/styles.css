@@ -793,13 +793,14 @@ tr.dim td {
   gap: 6px;
 }
 .step {
-  border-left: 2px solid var(--ok);
-  padding-left: 12px;
   font-size: 12px;
   color: var(--muted);
 }
-.step.failed {
-  border-left-color: var(--bad);
+.step button.link {
+  text-decoration: none;
+}
+.step.failed button.link {
+  color: var(--bad);
 }
 .step pre {
   margin: 6px 0 8px;

@@ -135,6 +135,9 @@ function link(href: string, label: ReactNode, key: string): ReactNode {
 }
 
 function inline(text: string, keyPrefix = ''): ReactNode[] {
+  // Models put <br> in table cells; honour it as a line break (it is never parsed as HTML).
+  const lines = text.split(/<br\s*\/?>/i);
+  if (lines.length > 1) return lines.flatMap((l, i) => (i ? [<br key={`${keyPrefix}br${i}`} />, ...inline(l, `${keyPrefix}${i}-`)] : inline(l, `${keyPrefix}${i}-`)));
   const parts = text.split(/(`[^`]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<>()`*]+|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*)/g);
   return parts.flatMap((part, i) => {
     const key = `${keyPrefix}${i}`;
