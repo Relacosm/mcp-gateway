@@ -57,7 +57,7 @@ utils-mcp:
 gateway:
   image:
     repository: ghcr.io/relacosm/urumi-gateway
-    tag: "0.1.7"
+    tag: "0.1.8"
   # Upstream connections and rate-limit counters are per replica; 1 keeps the
   # limit exact. Raise it if you accept per-replica limits.
   replicas: 1

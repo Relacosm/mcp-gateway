@@ -203,10 +203,12 @@ export class UpstreamManager {
       if (err instanceof McpError && err.code !== ErrorCode.RequestTimeout && err.code !== ErrorCode.ConnectionClosed) {
         throw new GatewayError(`upstream '${slug}' rejected the call: ${err.message}`);
       }
-      const reason =
-        err instanceof McpError && err.code === ErrorCode.RequestTimeout
-          ? `timed out after ${this.opts.callTimeoutMs / 1000}s`
-          : `is unreachable (${message(err)})`;
+      // A slow answer fails this call only: the server is still up, and the
+      // health check is what decides that a server is down.
+      if (err instanceof McpError && err.code === ErrorCode.RequestTimeout) {
+        throw new GatewayError(`upstream '${slug}' did not answer '${tool}' within ${this.opts.callTimeoutMs / 1000}s`);
+      }
+      const reason = `is unreachable (${message(err)})`;
       u.status = 'unreachable';
       u.error = reason;
       void this.disconnect(u);

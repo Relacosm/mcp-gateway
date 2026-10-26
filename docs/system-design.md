@@ -96,10 +96,12 @@ and audit rules cannot drift apart.
   status becomes **Unreachable**.
 - **Listing never waits on an upstream.** It is served from the cache, so one slow or dead
   server never blocks the others.
-- **Calls fail fast with a clear message.** Each call has its own timeout (15s), so the
-  message reads like "upstream 'utils' timed out after 15s". A call to an Unreachable server
-  returns immediately with "upstream 'utils' is unreachable (fetch failed)". A network failure
-  during a call also marks the server Unreachable.
+- **Calls fail with a clear message.** Each call has its own timeout (60s, since some tools
+  generate answers, e.g. DeepWiki's `ask_wiki_question`), and a slow call fails only itself:
+  "upstream 'deepwiki' did not answer 'ask_wiki_question' within 60s". It does not mark the
+  server down; the health check decides that. A call to an Unreachable server returns
+  immediately with "upstream 'utils' is unreachable (fetch failed)", and a network failure
+  during a call marks the server Unreachable.
 - **Disabling a server** closes its connection and hides its tools from everyone at once.
 - **Our MCP servers are stateless** (a new server and transport per request), so any replica
   can serve any request and a restart loses nothing.

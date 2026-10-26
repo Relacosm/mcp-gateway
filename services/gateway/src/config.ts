@@ -28,7 +28,7 @@ export const config = {
   masterKey: required('MASTER_KEY'),
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS ?? 24 * 7),
-  callTimeoutMs: Number(process.env.CALL_TIMEOUT_MS ?? 15000),
+  callTimeoutMs: Number(process.env.CALL_TIMEOUT_MS ?? 60000),
   healthTimeoutMs: Number(process.env.HEALTH_TIMEOUT_MS ?? 5000),
   healthIntervalMs: Number(process.env.HEALTH_INTERVAL_MS ?? 10000),
   // Tool calls allowed per API key (MCP) or per user (chat), per minute.

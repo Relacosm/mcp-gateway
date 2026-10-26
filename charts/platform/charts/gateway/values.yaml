@@ -47,7 +47,9 @@ allowedInternalHosts: []
 # Tool calls per API key (or per user's chat) per minute. 0 = unlimited.
 rateLimitPerMinute: 60
 
-callTimeoutMs: 15000
+# Per tool call. Generous because some tools generate answers (DeepWiki's
+# ask_wiki_question takes 10-30s); a dead server is caught by the health check.
+callTimeoutMs: 60000
 healthTimeoutMs: 5000
 healthIntervalMs: 10000
 
