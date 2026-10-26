@@ -81,7 +81,7 @@ gateway:
 provisioner:
   image:
     repository: ghcr.io/relacosm/urumi-provisioner
-    tag: "0.1.1"
+    tag: "0.1.2"
   # Each store is <name>.<domain>: add a wildcard DNS record (*.<domain>).
   # Sized for an 8 GB VPS; each extra store reserves roughly 1 GB.
   maxStores: 3
