@@ -80,7 +80,7 @@ body .wp-block-navigation a:hover { text-decoration: underline; }
 
 /* Buttons: solid ink, invert on hover. */
 body .wp-element-button, body .wp-block-button__link, body .wc-block-components-button,
-body button:not(.wp-block-navigation__responsive-container-open):not(.wp-block-navigation__responsive-container-close):not(.urumi-theme):not(.wc-block-mini-cart__button),
+body button:not(.wp-block-navigation__responsive-container-open):not(.wp-block-navigation__responsive-container-close):not(.urumi-theme):not(.wc-block-mini-cart__button):not(.wc-block-cart-item__remove-link),
 body input[type='submit'], body .button, body a.added_to_cart {
   background: var(--u-text) !important; color: var(--u-invert) !important;
   border: 1px solid var(--u-line) !important; box-shadow: none !important;
@@ -88,7 +88,7 @@ body input[type='submit'], body .button, body a.added_to_cart {
   padding: 12px 20px !important; transition: background .12s, color .12s;
 }
 body .wp-element-button:hover, body .wp-block-button__link:hover, body .wc-block-components-button:hover,
-body button:not(.urumi-theme):not(.wc-block-mini-cart__button):hover, body input[type='submit']:hover, body .button:hover {
+body button:not(.urumi-theme):not(.wc-block-mini-cart__button):not(.wc-block-cart-item__remove-link):hover, body input[type='submit']:hover, body .button:hover {
   background: var(--u-bg) !important; color: var(--u-text) !important;
 }
 body .wc-block-components-button__text { color: inherit !important; }
@@ -98,6 +98,15 @@ body button.wc-block-mini-cart__button, body .wc-block-mini-cart__button {
   padding: 8px 10px !important;
 }
 body button.wc-block-mini-cart__button:hover { background: var(--u-text) !important; color: var(--u-invert) !important; }
+/* Cart remove (trash) icon: a square hairline button beside the quantity. */
+body .wc-block-cart-item__quantity { display: flex; align-items: center; gap: 12px; }
+body button.wc-block-cart-item__remove-link {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 40px !important; height: 40px !important; padding: 0 !important; margin: 0 !important;
+  background: transparent !important; color: var(--u-text) !important; border: 1px solid var(--u-line) !important;
+}
+body button.wc-block-cart-item__remove-link svg { fill: currentColor; width: 20px; height: 20px; }
+body button.wc-block-cart-item__remove-link:hover { background: var(--u-text) !important; color: var(--u-invert) !important; }
 
 /* Fields: square, hairline. */
 body input:not([type='checkbox']):not([type='radio']):not([type='submit']), body select, body textarea,
