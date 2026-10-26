@@ -26,7 +26,8 @@ woo-mcp has a single read/write WooCommerce key.
 - **Shared identity upstream.** WooCommerce sees one identity for everyone, so per-person
   accountability lives in the gateway's audit log, not in WooCommerce. Anyone who can use
   `urumi__update_order_status` can act on every order.
-- **Mitigations:** per-server "members read-only" (writes are admin-only), the audit log,
+- **Mitigations:** per-server "members read-only", on by default (writes are for admins and,
+  on a store, its owner; a tool the gateway has not listed counts as a write), the audit log,
   and revoking a member's key, which immediately cuts off their access to every upstream.
 - **Who can read the secrets.** Anyone with Kubernetes Secret read access in the namespace
   (cluster admins) can read every credential. Protect this with RBAC and encryption at rest
@@ -101,7 +102,7 @@ compromised server (the public DeepWiki today, any server an admin adds tomorrow
 | Reach admin pages or APIs | No. The UI hides them and every admin route checks the role server side (403). |
 | Read upstream credentials | No. Never returned by any API. |
 | Exhaust shared upstreams | Limited by the per-key rate limit (60 calls/min default); calls over it are rejected without reaching the upstream. |
-| Change shared data others depend on | **Yes, by design**, through shared write tools (e.g. change an order's status or create products). Mitigated by the audit log (attributable) and per-server "members read-only". |
+| Change another member's store, or a shared server | No by default. Every server, and every store, is "members read-only" unless an admin turns it off: a member can only read other members' stores, write their own, and only admins write shared servers like `urumi`. Where an admin turns it off, writes are allowed and attributed in the audit log. |
 | CSRF against a member's session | Every mutating API call must be `application/json`, which browsers cannot send cross-site without a CORS preflight the API never approves; cookies are SameSite=Lax. |
 | Remove an admin | No, only admins manage members, and an admin cannot remove themselves. |
 

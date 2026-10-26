@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { ErrorCode, McpError, type CallToolResult, type Tool } from '@modelcontextprotocol/sdk/types.js';
 import { query } from './db.js';
-import type { Role } from './auth.js';
+import type { User } from './auth.js';
 import { decrypt } from './security.js';
 import { guardedFetch } from './ssrf.js';
 
@@ -23,6 +23,8 @@ export interface ServerRow {
 
 interface Upstream {
   row: ServerRow;
+  // The user who created the store behind this server, if it is a store.
+  ownerId: number | null;
   client?: Client;
   // Last good tool list. Only exposed while the server is connected.
   tools: Tool[];
@@ -38,9 +40,21 @@ export class GatewayError extends Error {}
 /** Exposed name of an upstream tool: "<slug>__<tool>". */
 export const SEPARATOR = '__';
 
-/** Whether a role may use a tool. Admins may use everything. */
-function allowed(row: ServerRow, tool: Tool, role: Role): boolean {
-  return role === 'admin' || !row.members_read_only || tool.annotations?.readOnlyHint === true;
+type Caller = Pick<User, 'id' | 'role'>;
+
+/**
+ * Whether a user may use a tool. Admins may use everything, and a store's
+ * owner everything on their own store. On a members-read-only server, other
+ * members only get tools the upstream marks read-only; a tool the gateway has
+ * not seen in a tools/list counts as a write.
+ */
+function allowed(u: Upstream, tool: Tool | undefined, user: Caller): boolean {
+  return (
+    user.role === 'admin' ||
+    u.ownerId === user.id ||
+    !u.row.members_read_only ||
+    tool?.annotations?.readOnlyHint === true
+  );
 }
 
 function message(err: unknown): string {
@@ -87,7 +101,8 @@ export class UpstreamManager {
   async upsert(row: ServerRow): Promise<void> {
     const old = this.upstreams.get(row.id);
     if (old) await this.disconnect(old);
-    const u: Upstream = { row, tools: [], status: row.enabled ? 'unreachable' : 'disabled' };
+    const [store] = await query<{ created_by: number | null }>('SELECT created_by FROM stores WHERE server_id = $1', [row.id]);
+    const u: Upstream = { row, ownerId: store?.created_by ?? null, tools: [], status: row.enabled ? 'unreachable' : 'disabled' };
     this.upstreams.set(row.id, u);
     await this.check(u);
   }
@@ -108,13 +123,13 @@ export class UpstreamManager {
     return undefined;
   }
 
-  /** Every tool of every enabled + connected server that the role may use, namespaced by slug. */
-  listTools(role: Role): Tool[] {
+  /** Every tool of every enabled + connected server that the user may use, namespaced by slug. */
+  listTools(user: Caller): Tool[] {
     const tools: Tool[] = [];
     for (const u of this.upstreams.values()) {
       if (u.status !== 'connected') continue;
       for (const t of u.tools) {
-        if (!allowed(u.row, t, role)) continue;
+        if (!allowed(u, t, user)) continue;
         tools.push({
           ...t,
           name: `${u.row.slug}${SEPARATOR}${t.name}`,
@@ -148,16 +163,16 @@ export class UpstreamManager {
     }));
   }
 
-  async callTool(slug: string, tool: string, args: Record<string, unknown>, role: Role): Promise<CallToolResult> {
+  async callTool(slug: string, tool: string, args: Record<string, unknown>, user: Caller): Promise<CallToolResult> {
     const u = this.bySlug(slug);
     if (!u) throw new GatewayError(`unknown server '${slug}'`);
     if (!u.row.enabled) throw new GatewayError(`upstream '${slug}' is disabled`);
     if (u.status !== 'connected' || !u.client) {
       throw new GatewayError(`upstream '${slug}' is unreachable${u.error ? ` (${u.error})` : ''}`);
     }
-    const known = u.tools.find((t) => t.name === tool);
-    if (known && !allowed(u.row, known, role)) {
-      throw new GatewayError(`'${slug}${SEPARATOR}${tool}' changes data and is limited to admins on this server`);
+    if (!allowed(u, u.tools.find((t) => t.name === tool), user)) {
+      const who = u.ownerId === null ? 'admins' : "admins and the store's owner";
+      throw new GatewayError(`'${slug}${SEPARATOR}${tool}' changes data and is limited to ${who} on this server`);
     }
     try {
       return (await u.client.callTool({ name: tool, arguments: args }, undefined, {

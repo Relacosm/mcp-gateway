@@ -13,7 +13,7 @@ interface FormState {
   members_read_only: boolean;
 }
 
-const EMPTY: FormState = { name: '', slug: '', url: '', auth_type: 'none', auth_header: '', credential: '', members_read_only: false };
+const EMPTY: FormState = { name: '', slug: '', url: '', auth_type: 'none', auth_header: '', credential: '', members_read_only: true };
 
 function ServerForm({ server, onDone }: { server?: Server; onDone: () => void }) {
   const [form, setForm] = useState<FormState>(
@@ -103,7 +103,7 @@ function ServerForm({ server, onDone }: { server?: Server; onDone: () => void })
           checked={form.members_read_only}
           onChange={(e) => setForm({ ...form, members_read_only: e.target.checked })}
         />
-        Members may only use read-only tools (writes are admin-only)
+        Members may only use read-only tools (writes are for admins and, on a store, its owner)
       </label>
       {error && <div className="error">{error}</div>}
       <div className="row">

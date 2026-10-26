@@ -273,7 +273,7 @@ export async function runChat(
 ): Promise<{ reply: string; steps: ChatStep[] }> {
   if (!config.llmBaseUrl || !config.llmModel) throw new HttpError(503, 'the chat agent is not configured (LLM_BASE_URL / LLM_MODEL)');
 
-  const tools = gw.upstreams.listTools(user.role).map(toLlmTool);
+  const tools = gw.upstreams.listTools(user).map(toLlmTool);
   const names = new Set(tools.map((t) => t.function.name));
   const messages: LlmMessage[] = [{ role: 'system', content: systemPrompt(user, [...names], gw.upstreams.describe(), storefronts) }, ...history];
   const steps: ChatStep[] = [];

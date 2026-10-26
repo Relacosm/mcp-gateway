@@ -37,7 +37,7 @@ export function mcpRouter(gw: Gateway): Router {
         instructions: 'Tools from every server the team has connected, named <server>__<tool>.',
       },
     );
-    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: gw.upstreams.listTools(caller.user.role) }));
+    server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: gw.upstreams.listTools(caller.user) }));
     server.setRequestHandler(CallToolRequestSchema, async (request) =>
       routeToolCall(gw, caller, request.params.name, request.params.arguments ?? {}),
     );

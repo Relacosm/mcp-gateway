@@ -83,6 +83,14 @@ CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- Servers are members-read-only unless an admin turns it off. Existing servers
+-- are switched once; the meta row keeps a later admin choice from being undone.
+ALTER TABLE servers ALTER COLUMN members_read_only SET DEFAULT true;
+WITH once AS (
+  INSERT INTO meta (key, value) VALUES ('members_read_only_default', 'true') ON CONFLICT (key) DO NOTHING RETURNING 1
+)
+UPDATE servers SET members_read_only = true WHERE EXISTS (SELECT 1 FROM once);
 `;
 
 /** Waits for Postgres (it may still be starting), then creates the schema. */

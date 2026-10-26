@@ -51,7 +51,7 @@ const serverCreate = z.object({
   ...serverBase,
   slug,
   enabled: serverBase.enabled.default(true),
-  members_read_only: serverBase.members_read_only.default(false),
+  members_read_only: serverBase.members_read_only.default(true),
 });
 const chatBody = z.object({
   messages: z
@@ -172,7 +172,7 @@ export function apiRouter(gw: Gateway, stores: StoreService): Router {
   });
 
   api.get('/tools', requireUser, (req, res) => {
-    res.json(upstreams.listTools(req.user!.role).map((t) => ({ name: t.name, description: t.description })));
+    res.json(upstreams.listTools(req.user!).map((t) => ({ name: t.name, description: t.description })));
   });
 
   // Calls, errors and latency per server over the last 24 hours, from the audit log.

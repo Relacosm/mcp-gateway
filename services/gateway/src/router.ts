@@ -53,7 +53,7 @@ export async function routeToolCall(
   let error: string | null = null;
   try {
     if (!slug) throw new GatewayError(`unknown tool '${name}': expected <server>${SEPARATOR}<tool>`);
-    result = await gw.upstreams.callTool(slug, tool, args, caller.user.role);
+    result = await gw.upstreams.callTool(slug, tool, args, caller.user);
     if (result.isError) {
       outcome = 'tool_error';
       error = firstText(result);

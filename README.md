@@ -160,7 +160,8 @@ in the audit log with `via = chat`.
 - **Servers:** add (any Streamable HTTP MCP URL, optional bearer or custom-header
   credential), edit, disable, remove, "Check now". Status: Connected / Unreachable / Disabled.
   Per-server 24h metrics (calls, errors, avg/p95 latency, rate-limited calls).
-  "Members may only use read-only tools" limits members to tools marked `readOnlyHint`.
+  "Members may only use read-only tools" (on by default, including for every store) limits
+  members to tools marked `readOnlyHint`. A store's owner keeps write access to their own store.
 - **API keys:** revoke any key; it is rejected on the very next call.
 - **Audit log:** every tool call (user, server, tool, time, duration, outcome); filter by
   user and server.
