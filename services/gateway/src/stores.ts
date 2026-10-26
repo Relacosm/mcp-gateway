@@ -85,7 +85,47 @@ export class StoreService {
       };
     });
     const mine = rows.filter((r) => r.created_by === user.id).length;
-    return { stores, limits: { per_user: config.maxStoresPerUser, mine } };
+    return { stores: [...this.builtin(), ...stores], limits: { per_user: config.maxStoresPerUser, mine } };
+  }
+
+  /** The store that ships with the platform: listed first, never deletable here. */
+  builtin() {
+    if (!config.builtinStoreUrl) return [];
+    const u = this.upstreams.bySlug('urumi');
+    return [
+      {
+        name: 'urumi',
+        namespace: '',
+        state: 'ready' as State,
+        message: 'built-in store',
+        url: config.builtinStoreUrl,
+        admin_url: `${config.builtinStoreUrl}/wp-admin/`,
+        mcp_url: '',
+        created_at: null,
+        created_by: null,
+        can_manage: false,
+        server: u ? { id: u.row.id, slug: u.row.slug, status: u.status, tools: u.tools.length } : null,
+      },
+    ];
+  }
+
+  /**
+   * Public storefront URL per store server slug, the built-in store included.
+   * Only the customer-facing address: never the internal MCP URL.
+   */
+  async storefronts(): Promise<Map<string, string>> {
+    const urls = new Map<string, string>();
+    if (config.builtinStoreUrl) urls.set('urumi', config.builtinStoreUrl);
+    if (!this.enabled) return urls;
+    try {
+      for (const p of await this.call<ProvisionedStore[]>('GET', '/stores')) {
+        if (p.state === 'ready' && p.url) urls.set(p.name, p.url.replace(/\/$/, ''));
+      }
+    } catch (err) {
+      // The chat still works without the links.
+      console.error('storefront list', err);
+    }
+    return urls;
   }
 
   /** Creates a store, or retries one of yours that failed. Safe to repeat. */

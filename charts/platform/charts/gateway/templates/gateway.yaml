@@ -72,6 +72,9 @@ spec:
               value: {{ .Values.admin.email | quote }}
             - name: TIMEZONE
               value: {{ .Values.timezone | quote }}
+            # Public address of the built-in store, so the chat can name it.
+            - name: BUILTIN_STORE_URL
+              value: "{{ if .Values.global.ingress.tls }}https{{ else }}http{{ end }}://{{ .Values.storeHost }}.{{ .Values.global.domain }}"
             - name: ADMIN_PASSWORD
               valueFrom:
                 secretKeyRef: { name: {{ .Release.Name }}-gateway, key: admin-password }

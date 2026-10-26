@@ -43,6 +43,8 @@ export const config = {
   // Chat agent: any OpenAI-compatible chat completions API.
   // Timezone the agent uses for "today" (the stores' timezone).
   timezone: process.env.TIMEZONE || 'UTC',
+  // Public storefront of the built-in store (the seeded 'urumi' server).
+  builtinStoreUrl: (process.env.BUILTIN_STORE_URL ?? '').replace(/\/$/, ''),
   llmBaseUrl: (process.env.LLM_BASE_URL ?? '').replace(/\/$/, ''),
   llmModel: process.env.LLM_MODEL ?? '',
   llmApiKey: process.env.LLM_API_KEY ?? '',

@@ -196,7 +196,7 @@ export function apiRouter(gw: Gateway, stores: StoreService): Router {
   // ---- chat agent
   api.post('/chat', requireUser, async (req, res) => {
     const { messages } = chatBody.parse(req.body);
-    res.json(await runChat(gw, req.user!, messages));
+    res.json(await runChat(gw, req.user!, messages, await stores.storefronts()));
   });
 
   api.post('/servers', requireAdmin, async (req, res) => {
@@ -270,7 +270,7 @@ export function apiRouter(gw: Gateway, stores: StoreService): Router {
   // Any user may own a few; owners and admins manage them.
   api.get('/stores', requireUser, async (req, res) => {
     if (!stores.enabled) {
-      res.json({ enabled: false, stores: [] });
+      res.json({ enabled: false, stores: stores.builtin() });
       return;
     }
     res.json({ enabled: true, ...(await stores.list(req.user!)) });

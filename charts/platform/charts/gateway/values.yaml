@@ -1,6 +1,8 @@
 # Public host is <host>.<global.domain>; the gateway serves /api and /mcp there,
 # the dashboard serves everything else on the same host.
 host: gateway
+# Host of the built-in store, matching store.host.
+storeHost: store
 
 image:
   repository: urumi/gateway
