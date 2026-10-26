@@ -104,8 +104,8 @@ export function Stores() {
       </header>
       <p className="muted">
         Each store gets its own namespace, WordPress site, database and MCP server, with its own quota and limits. When it is
-        ready, its tools appear for everyone as <code>&lt;name&gt;__list_orders</code> and so on. The built-in store (store.localtest.me) is
-        the <code>urumi</code> server.
+        ready, its tools appear for everyone as <code>&lt;name&gt;__list_orders</code> and so on. The built-in store is the <code>urumi</code>{' '}
+        server.
       </p>
       {!enabled && <div className="error">Store provisioning is not enabled in this install.</div>}
       {enabled && (
