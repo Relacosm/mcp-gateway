@@ -82,7 +82,7 @@ export function App() {
         </div>
       </nav>
       <div className="content">
-        <TopBar crumb={visible[index]?.label ?? ''} index={index + 1} total={visible.length} canGoBack={moved} />
+        <TopBar crumb={visible[index]?.label ?? ''} canGoBack={moved} />
         <main>
           {active === 'chat' && <Chat me={me} />}
           {active === 'servers' && <Servers isAdmin={isAdmin} />}
@@ -97,7 +97,7 @@ export function App() {
 }
 
 /** A thin readout: where you are, how many upstreams are up, and the time. */
-function TopBar({ crumb, index, total, canGoBack }: { crumb: string; index: number; total: number; canGoBack: boolean }) {
+function TopBar({ crumb, canGoBack }: { crumb: string; canGoBack: boolean }) {
   const [servers, setServers] = useState<Server[] | null>(null);
   const [now, setNow] = useState(() => new Date());
 
@@ -123,9 +123,6 @@ function TopBar({ crumb, index, total, canGoBack }: { crumb: string; index: numb
         <button className="secondary back" onClick={() => history.back()} disabled={!canGoBack} title="Previous page">
           ← Back
         </button>
-        <span className="muted">
-          {String(index).padStart(2, '0')}/{String(total).padStart(2, '0')}
-        </span>{' '}
         {crumb}
       </span>
       <span className="topbar-stats">
