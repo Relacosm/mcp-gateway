@@ -184,9 +184,8 @@ export function Servers({ isAdmin }: { isAdmin: boolean }) {
         {isAdmin && !editing && <button onClick={() => setEditing('new')}>Add server</button>}
       </header>
       {error && <div className="error">{error}</div>}
-      {editing && (
+      {editing === 'new' && (
         <ServerForm
-          server={editing === 'new' ? undefined : editing}
           onDone={() => {
             setEditing(null);
             load();
@@ -237,9 +236,14 @@ export function Servers({ isAdmin }: { isAdmin: boolean }) {
                 <button className="secondary" onClick={() => checkNow(s)} disabled={checking[s.id]}>
                   {checking[s.id] ? 'Checking…' : 'Check now'}
                 </button>
-                <button className="secondary" onClick={() => setEditing(s)}>
-                  Edit
-                </button>
+                {(() => {
+                  const isOpen = editing !== null && editing !== 'new' && editing.id === s.id;
+                  return (
+                    <button className="secondary" onClick={() => setEditing(isOpen ? null : s)}>
+                      {isOpen ? 'Close' : 'Edit'}
+                    </button>
+                  );
+                })()}
                 <button
                   className="danger"
                   onClick={() => confirm(`Remove ${s.name}? Its tools disappear for everyone.`) && act(() => api(`/servers/${s.id}`, { method: 'DELETE' }))}
@@ -249,6 +253,16 @@ export function Servers({ isAdmin }: { isAdmin: boolean }) {
               </>
             )}
           </div>
+          {/* The edit form opens in the card that was clicked, not at the top of a long page. */}
+          {editing !== null && editing !== 'new' && editing.id === s.id && (
+            <ServerForm
+              server={editing}
+              onDone={() => {
+                setEditing(null);
+                load();
+              }}
+            />
+          )}
           {checked[s.id] && (
             <div className={`check-result small ${checked[s.id].ok ? 'ok' : 'bad'}`} role="status">
               {checked[s.id].ok ? '✓' : '✕'} Checked just now · {checked[s.id].text}
