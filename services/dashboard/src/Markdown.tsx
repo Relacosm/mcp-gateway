@@ -122,12 +122,34 @@ function joinLines(lines: string[]): ReactNode[] {
   return lines.flatMap((l, i) => (i ? [<br key={`br${i}`} />, ...inline(l, `l${i}`)] : inline(l, `l${i}`)));
 }
 
+// Links: [text](url) or a bare URL. Only http(s), so a reply cannot carry a javascript: link.
+const MD_LINK = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/;
+const BARE_URL = /^https?:\/\/\S+$/;
+
+function link(href: string, label: ReactNode, key: string): ReactNode {
+  return (
+    <a key={key} href={href} target="_blank" rel="noreferrer noopener">
+      {label}
+    </a>
+  );
+}
+
 function inline(text: string, keyPrefix = ''): ReactNode[] {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*)/g);
-  return parts.map((part, i) => {
+  const parts = text.split(/(`[^`]+`|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|https?:\/\/[^\s<>()`*]+|\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*)/g);
+  return parts.flatMap((part, i) => {
     const key = `${keyPrefix}${i}`;
-    if (/^`[^`]+`$/.test(part)) return <code key={key}>{part.slice(1, -1)}</code>;
-    if (/^(\*\*|__).+\1$/.test(part)) return <strong key={key}>{part.slice(2, -2)}</strong>;
+    if (/^`[^`]+`$/.test(part)) {
+      const code = part.slice(1, -1);
+      return BARE_URL.test(code) ? link(code, <code>{code}</code>, key) : <code key={key}>{code}</code>;
+    }
+    const md = MD_LINK.exec(part);
+    if (md) return link(md[2], md[1], key);
+    if (BARE_URL.test(part)) {
+      // A sentence's closing punctuation is not part of the URL.
+      const [, url, tail] = /^(.*?)([.,;:!?]*)$/.exec(part)!;
+      return [link(url, url, key), tail];
+    }
+    if (/^(\*\*|__).+\1$/.test(part)) return <strong key={key}>{inline(part.slice(2, -2), `${key}-`)}</strong>;
     if (/^\*[^*\s][^*]*\*$/.test(part)) return <em key={key}>{part.slice(1, -1)}</em>;
     return part;
   });

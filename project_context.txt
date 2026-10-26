@@ -295,7 +295,7 @@ Server : Contabo Cloud VPS 4 (4 vCPU, 8 GB, 100 GB), EU, IP 169.58.32.177,
          ~$7.79/month, renews monthly: CANCEL it in the Contabo panel when done.
 SSH    : ssh -i ~/.ssh/urumi_vps root@169.58.32.177  (KUBECONFIG=/etc/rancher/k3s/k3s.yaml)
 DNS    : Spaceship, relacosm.com: A  *.urumi -> 169.58.32.177 (TTL 5 min)
-Images : ghcr.io/relacosm/urumi-* (public packages), tag 0.1.0; provisioner 0.1.2; dashboard 0.1.2; gateway 0.1.1.
+Images : ghcr.io/relacosm/urumi-* (public packages), tag 0.1.0; provisioner 0.1.2; dashboard 0.1.3; gateway 0.1.1.
 Secrets: prod.secret.yaml on this PC only (gitignored): Groq key + emails.
          Everything else (DB passwords, master key, admin password) is generated
          in the cluster on first install. Admin login = hraj51399@gmail.com,
