@@ -17,6 +17,8 @@ export interface SeedServer {
   url: string;
   // Name of the env var holding the bearer token, if the server needs one.
   tokenEnv?: string;
+  // Tools to label read-only when the upstream does not set readOnlyHint itself.
+  readOnlyTools?: string[];
 }
 
 // Postgres connection comes from the standard PGHOST/PGUSER/PGPASSWORD/PGDATABASE vars.

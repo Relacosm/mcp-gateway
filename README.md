@@ -162,6 +162,8 @@ in the audit log with `via = chat`.
   Per-server 24h metrics (calls, errors, avg/p95 latency, rate-limited calls).
   "Members may only use read-only tools" (on by default, including for every store) limits
   members to tools marked `readOnlyHint`. A store's owner keeps write access to their own store.
+  When an upstream leaves that label out or gets it wrong (DeepWiki sets none), an admin can
+  correct it per tool under "Show tools" (mark as read / mark as write / reset).
 - **API keys:** revoke any key; it is rejected on the very next call.
 - **Audit log:** every tool call (user, server, tool, time, duration, outcome); filter by
   user and server.

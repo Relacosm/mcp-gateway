@@ -19,7 +19,12 @@ export interface ServerRow {
   enabled: boolean;
   // Members may only use tools the upstream marks read-only (readOnlyHint).
   members_read_only: boolean;
+  // Admin labels that replace the upstream's readOnlyHint for a tool, for
+  // upstreams that leave it out (or get it wrong).
+  tool_access: Record<string, ToolAccess>;
 }
+
+export type ToolAccess = 'read' | 'write';
 
 interface Upstream {
   row: ServerRow;
@@ -43,18 +48,22 @@ export const SEPARATOR = '__';
 type Caller = Pick<User, 'id' | 'role'>;
 
 /**
+ * Whether a tool only reads: the admin's label if there is one, else the
+ * upstream's readOnlyHint. A tool with neither (or one the gateway has not
+ * seen in a tools/list) counts as a write.
+ */
+function isReadOnly(u: Upstream, name: string, tool: Tool | undefined): boolean {
+  const label = u.row.tool_access?.[name];
+  return label ? label === 'read' : tool?.annotations?.readOnlyHint === true;
+}
+
+/**
  * Whether a user may use a tool. Admins may use everything, and a store's
  * owner everything on their own store. On a members-read-only server, other
- * members only get tools the upstream marks read-only; a tool the gateway has
- * not seen in a tools/list counts as a write.
+ * members only get read-only tools.
  */
-function allowed(u: Upstream, tool: Tool | undefined, user: Caller): boolean {
-  return (
-    user.role === 'admin' ||
-    u.ownerId === user.id ||
-    !u.row.members_read_only ||
-    tool?.annotations?.readOnlyHint === true
-  );
+function allowed(u: Upstream, name: string, tool: Tool | undefined, user: Caller): boolean {
+  return user.role === 'admin' || u.ownerId === user.id || !u.row.members_read_only || isReadOnly(u, name, tool);
 }
 
 function message(err: unknown): string {
@@ -107,6 +116,12 @@ export class UpstreamManager {
     await this.check(u);
   }
 
+  /** Applies a row change that needs no reconnect (tool labels). */
+  update(row: ServerRow): void {
+    const u = this.upstreams.get(row.id);
+    if (u) u.row = row;
+  }
+
   async remove(id: number): Promise<void> {
     const u = this.upstreams.get(id);
     this.upstreams.delete(id);
@@ -129,11 +144,13 @@ export class UpstreamManager {
     for (const u of this.upstreams.values()) {
       if (u.status !== 'connected') continue;
       for (const t of u.tools) {
-        if (!allowed(u, t, user)) continue;
+        if (!allowed(u, t.name, t, user)) continue;
         tools.push({
           ...t,
           name: `${u.row.slug}${SEPARATOR}${t.name}`,
           description: `[${u.row.name}] ${t.description ?? ''}`.trim(),
+          // Clients see the gateway's verdict, including an admin's label.
+          annotations: { ...t.annotations, readOnlyHint: isReadOnly(u, t.name, t) },
         });
       }
     }
@@ -158,7 +175,9 @@ export class UpstreamManager {
       tools: u.tools.map((t) => ({
         name: t.name,
         description: t.description ?? '',
-        read_only: t.annotations?.readOnlyHint === true,
+        read_only: isReadOnly(u, t.name, t),
+        // Who decided: the upstream's readOnlyHint, or an admin's label.
+        labeled_by: u.row.tool_access?.[t.name] ? ('admin' as const) : ('upstream' as const),
       })),
     }));
   }
@@ -170,7 +189,7 @@ export class UpstreamManager {
     if (u.status !== 'connected' || !u.client) {
       throw new GatewayError(`upstream '${slug}' is unreachable${u.error ? ` (${u.error})` : ''}`);
     }
-    if (!allowed(u, u.tools.find((t) => t.name === tool), user)) {
+    if (!allowed(u, tool, u.tools.find((t) => t.name === tool), user)) {
       const who = u.ownerId === null ? 'admins' : "admins and the store's owner";
       throw new GatewayError(`'${slug}${SEPARATOR}${tool}' changes data and is limited to ${who} on this server`);
     }

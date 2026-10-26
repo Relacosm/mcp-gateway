@@ -252,6 +252,23 @@ export function apiRouter(gw: Gateway, stores: StoreService): Router {
     res.json(upstreams.describe().find((s) => s.id === id));
   });
 
+  // Label one tool read or write when the upstream's readOnlyHint is missing or
+  // wrong; null goes back to the upstream's own label.
+  api.put('/servers/:id/tools/:tool', requireAdmin, async (req, res) => {
+    const id = idParam(req);
+    const tool = String(req.params.tool);
+    const { access } = z.object({ access: z.enum(['read', 'write']).nullable() }).parse(req.body);
+    const [row] = await query<ServerRow>(
+      access
+        ? `UPDATE servers SET tool_access = tool_access || jsonb_build_object($2::text, $3::text) WHERE id = $1 RETURNING *`
+        : `UPDATE servers SET tool_access = tool_access - $2::text WHERE id = $1 RETURNING *`,
+      access ? [id, tool, access] : [id, tool],
+    );
+    if (!row) throw new HttpError(404, 'no such server');
+    upstreams.update(row);
+    res.json(upstreams.describe().find((s) => s.id === id));
+  });
+
   api.delete('/servers/:id', requireAdmin, async (req, res) => {
     const id = idParam(req);
     const removed = await query('DELETE FROM servers WHERE id = $1 RETURNING id', [id]);

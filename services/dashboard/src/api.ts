@@ -43,7 +43,8 @@ export interface Server {
   status: 'connected' | 'unreachable' | 'disabled';
   error: string | null;
   checked_at: string | null;
-  tools: { name: string; description: string; read_only: boolean }[];
+  // labeled_by: whether read/write comes from the upstream's readOnlyHint or an admin's label.
+  tools: { name: string; description: string; read_only: boolean; labeled_by: 'upstream' | 'admin' }[];
 }
 
 export interface ServerMetrics {

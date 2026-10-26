@@ -28,10 +28,11 @@ async function seed(): Promise<void> {
     const [done] = await query('SELECT 1 FROM meta WHERE key = $1', [flag]);
     if (done) continue;
     const token = seed.tokenEnv ? process.env[seed.tokenEnv] : undefined;
+    const toolAccess = Object.fromEntries((seed.readOnlyTools ?? []).map((t) => [t, 'read']));
     await query(
-      `INSERT INTO servers (name, slug, url, auth_type, credential_enc) VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO servers (name, slug, url, auth_type, credential_enc, tool_access) VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (slug) DO NOTHING`,
-      [seed.name, seed.slug, seed.url, token ? 'bearer' : 'none', token ? encrypt(token) : null],
+      [seed.name, seed.slug, seed.url, token ? 'bearer' : 'none', token ? encrypt(token) : null, JSON.stringify(toolAccess)],
     );
     await query('INSERT INTO meta (key, value) VALUES ($1, now()::text)', [flag]);
     console.log(`registered upstream '${seed.slug}'`);

@@ -262,6 +262,27 @@ export function Servers({ isAdmin }: { isAdmin: boolean }) {
                     {s.slug}__{t.name}
                   </code>{' '}
                   {t.read_only ? <span className="badge">read</span> : <span className="badge admin">write</span>}{' '}
+                  {t.labeled_by === 'admin' && <span className="muted small">(labeled by an admin)</span>}{' '}
+                  {isAdmin && (
+                    <button
+                      className="link small"
+                      title={
+                        t.labeled_by === 'admin'
+                          ? "Go back to the server's own label"
+                          : 'Correct this label if the server reports it wrongly'
+                      }
+                      onClick={() =>
+                        act(() =>
+                          api(`/servers/${s.id}/tools/${encodeURIComponent(t.name)}`, {
+                            method: 'PUT',
+                            body: { access: t.labeled_by === 'admin' ? null : t.read_only ? 'write' : 'read' },
+                          }),
+                        )
+                      }
+                    >
+                      {t.labeled_by === 'admin' ? 'reset' : t.read_only ? 'mark as write' : 'mark as read'}
+                    </button>
+                  )}{' '}
                   <span className="muted">{t.description}</span>
                 </li>
               ))}

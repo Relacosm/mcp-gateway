@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS audit_log_created_idx ON audit_log (created_at DESC);
 
 ALTER TABLE servers ADD COLUMN IF NOT EXISTS members_read_only BOOLEAN NOT NULL DEFAULT false;
+-- Admin labels per tool ({"tool": "read" | "write"}), replacing the upstream's readOnlyHint.
+ALTER TABLE servers ADD COLUMN IF NOT EXISTS tool_access JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- Extra stores created from the dashboard. token_enc is the bearer token the
 -- store's MCP server requires; server_id is set once the store is registered.

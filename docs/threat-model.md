@@ -69,6 +69,9 @@ compromised server (the public DeepWiki today, any server an admin adds tomorrow
   loop has a step cap (6), which bounds a runaway injection.
 - **Least privilege:** with "members read-only", a member's session cannot run write tools
   even if the model is talked into it. The check is in the gateway, not the prompt.
+- **Labels are not trusted blindly:** read/write comes from the upstream's `readOnlyHint`, but
+  an admin can override it per tool (a write tool that claims to be read-only can be marked as
+  write). A tool with no label, or one the gateway has not listed yet, counts as a write.
 - **Visibility:** the chat UI shows every tool call with its arguments, and every call is
   audited under the user, so an injected action is visible and attributable.
 - **SSRF guard on server URLs:**
