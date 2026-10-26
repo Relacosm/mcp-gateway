@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 import { api, TIME_ZONE, type Me, type Server } from './api';
 import { ThemeToggle } from './theme';
 import { Login } from './pages/Login';
@@ -20,9 +20,21 @@ const PAGES: { id: Page; label: string; adminOnly?: boolean }[] = [
   { id: 'members', label: 'Members', adminOnly: true },
 ];
 
+// Pages live at clean paths (/chat, /servers); nginx serves index.html for each.
 function currentPage(): Page {
-  const id = location.hash.slice(1) as Page;
+  // Old #hash links still land on the right page, then switch to the path.
+  const legacy = location.hash.slice(1);
+  if (legacy) history.replaceState(null, '', `/${legacy}`);
+  const id = location.pathname.replace(/^\/+|\/+$/g, '') as Page;
   return PAGES.some((p) => p.id === id) ? id : 'chat';
+}
+
+function go(e: MouseEvent<HTMLAnchorElement>, id: Page, setPage: (p: Page) => void): void {
+  // Let ctrl/cmd-click open a new tab as usual.
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  if (location.pathname !== `/${id}`) history.pushState(null, '', `/${id}`);
+  setPage(id);
 }
 
 export function App() {
@@ -35,12 +47,12 @@ export function App() {
     api<Me>('/auth/me')
       .then(setMe)
       .catch(() => setMe(null));
-    const onHash = () => {
+    const onPop = () => {
       setPage(currentPage());
       setMoved(true);
     };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   if (me === undefined) return <div className="center muted">Loading_</div>;
@@ -63,7 +75,15 @@ export function App() {
       <nav className="sidebar">
         <div className="brand">MCP Gateway</div>
         {visible.map((p, i) => (
-          <a key={p.id} href={`#${p.id}`} className={p.id === active ? 'active' : ''}>
+          <a
+            key={p.id}
+            href={`/${p.id}`}
+            className={p.id === active ? 'active' : ''}
+            onClick={(e) => {
+              go(e, p.id, setPage);
+              setMoved(true);
+            }}
+          >
             <span>
               <span className="nav-no">{String(i + 1).padStart(2, '0')}</span>
               {p.label}
