@@ -271,8 +271,7 @@ Built and verified on local k3d:
 - Fixed: on a FRESH store volume WooCommerce was never copied in, because the
   skin was mounted inside wp-content (kubelet created it as root). The skin now
   mounts at /opt/urumi/mu-plugins and WPMU_PLUGIN_DIR points there.
-- Code: https://github.com/Relacosm/mcp-gateway (PRIVATE - make it public or add
-  the reviewers before submitting).
+- Code: https://github.com/Relacosm/mcp-gateway (public since 2026-10-26).
 
 Local demo accounts (k3d, gateway.localtest.me):
   admin  hraj51399@gmail.com (password in secret platform-gateway/admin-password)
@@ -319,7 +318,5 @@ Deploy / upgrade (from this PC):
 
 Still to do (by the user):
 - Record the demo video and submit the form (deadline 26 Oct 2026, 11:59 PM IST).
-- Make the GitHub repo public (or share it) before submitting.
-- Push the local commits to GitHub (not pushed yet).
 - Cancel the Contabo VPS after the interviews.
 - After submitting, rotate the Groq key (it was pasted in a chat).

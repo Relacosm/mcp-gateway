@@ -256,5 +256,10 @@ helm upgrade --install platform charts/platform -n urumi --create-namespace \
 | Cross-store isolation: a store's DB, WordPress and MCP server are unreachable from other stores | `templates/networkpolicies.yaml` |
 | Pre-built store image (WooCommerce baked in, per-store settings still applied) | `services/store-wordpress` |
 
-Not done: a real VPS deploy (the prod values render and are ready, but no server was
-available).
+Live VPS deploy (k3s on a Contabo VPS, Let's Encrypt TLS):
+
+- Dashboard: https://gateway.urumi.relacosm.com
+- MCP endpoint: https://gateway.urumi.relacosm.com/mcp
+- Built-in store: https://store.urumi.relacosm.com
+- Stores created from the dashboard: `https://<name>.urumi.relacosm.com` (wildcard DNS),
+  e.g. https://quickbakers.urumi.relacosm.com
